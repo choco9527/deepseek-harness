@@ -8,6 +8,7 @@
  * Export discipline: packages/client/AGENTS.md.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { Config } from '../index.ts'
 // Type-only: pulls the ctx.remote merge and its fixed Host facts.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
@@ -65,6 +66,7 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settin
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  const presentation = ctx.settingsScope.bind<Config>({ namespace: 'ui-settings-shell' })
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-general: dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
 
@@ -96,6 +98,7 @@ export function apply(ctx: ClientContext): void {
   const shellInjected = (): SettingsRootInjected => ({
     reconnect: () => { connection.reconnect() },
     hooks: {
+      presentation,
       connectionState: connection.state,
       sections: {
         getSnapshot: () => {

@@ -15,7 +15,7 @@ textarea 输入框用三个耦合层绘制文本（隐藏自增高 mirror、装�
 每个会话壳持有一个 Lexical 编辑器，取代三层结构与状态机的草稿半边。
 
 - **所有权**：`SessionInputShell` 在 React 之外创建编辑器（`createEditor` + `registerPlainText` + `registerHistory`）并持有它到会话结束；React 侧把常驻 contenteditable 绑上去（`ComposerContentEditable`，约 40 行）并 portal 渲染 decorator（`DecoratorPortals`）。刻意不用 `@lexical/react`：其 composer 在 React 内部创建编辑器，与 per-session 壳所有权冲突，还会拖入用不到的依赖树。
-- **chip 是原子 `DecoratorNode`**（`ReferenceChipNode`），携带所有者插入时的投影。NodeKey 即 occurrence 身份；`getTextContent()` 回答剪贴板投影，因此原生复制/剪切与草稿镜像不再需要展开代码。
+- **chip 是原子 `DecoratorNode`**（`ReferenceChipNode`），携带所有者插入时的投影。NodeKey 是编辑器身份；shell 为每个存活节点发布 `occurrenceId`，输入扩展可调用 `SessionInput.removeReference()`，无需接触 Lexical。`getTextContent()` 回答剪贴板投影，因此原生复制/剪切与草稿镜像不再需要展开代码。
 - **一棵树，三个投影**：检测投影（chip = 1 个 U+FFFC）供 `detectTrigger` 与 TokenSpan 坐标使用，恢复了 #2769 打破的不透明引用不变量；剪贴板投影（chip = clipboardText）供 `InputState.draft`、持久化与提交面决策使用；模型形式在提交时逐 chip 经所有者 codec 产出。`span-map.ts` 是数字 span 映射回 Lexical point 的唯一场所。
 - **状态机瘦身为提交面**（phase/claim/attempt）；它不再持有草稿——事件携带剪贴板投影（`enter`、`submit-settled`），claimed 完整性监视跑在 `draft-changed` 上。清空草稿变成 shell 在编辑器里执行的 `commit-draft` 效果（含后缀保留），随后 `CLEAR_HISTORY_COMMAND`。
 - **契约稳定**：`TokenSpan {start, end, draftRev}`、`ReferenceInsert`、`CommandClaim`、四个 `slash/input-*` bail 事件、所有 trigger source、controller 与 MenuView 一律未改。`draftRev` 现在是编辑器 update 计数。
@@ -28,8 +28,8 @@ mirror/backdrop 层及其 CSS 耦合规则；Safari 软换行修复（2026-08-13
 ## 刻意的行为变化
 
 - 已认领命令的 args 现以剪贴板形式到达 source（引用为规范文本而非展示标签）——可解析的那种形式。
-- `InputState.draft` 是剪贴板投影（原为展示文本）。跨包读方只消费 phase/queue 级字段；occurrence 表的外部读方为零。
-- chip 删除遵循引擎的原生 decorator 手势；jsdom 缺 `Selection.modify`，键盘路径只在浏览器 lane 断言。
+- `InputState.draft` 是剪贴板投影（原为展示文本）。输入扩展可读取仅运行时的 occurrence 表，并按 `occurrenceId` 删除存活 chip；id 不会跨 shell 或持久化边界。
+- chip 删除遵循引擎的原生 decorator 手势或 `SessionInput.removeReference(occurrenceId)`；jsdom 缺 `Selection.modify`，键盘路径只在浏览器 lane 断言。
 - 文件夹纯文本引用在完整字面 token 前渲染文件夹图标前缀（气泡同款资产的 currentcolor mask）；旧 backdrop 是覆盖绘制 trigger 字符，而 Lexical 文本节点无法表达这种覆盖。
 - 输入框的可访问名称改为显式 `aria-label` 镜像 placeholder（div 的 `data-placeholder` 不像 textarea 的 placeholder 那样参与命名）——由 reference-composer 的 aria golden 逮出。
 - 纯光标 commit 不发布任何东西：shell 只在投影内容变化时推进 `draftRev` 并重发布 `InputState`。光标移动仍然喂给菜单 tracking，但既不会使快照构造的 CAS span 失效（apply.ts 用已发布的 `draftRev` 构造 span），也不会触发订阅者重渲染。第一版每次 commit 都重发布；review 逮出了与旧机器「仅文本推进版本号」语义的漂移。

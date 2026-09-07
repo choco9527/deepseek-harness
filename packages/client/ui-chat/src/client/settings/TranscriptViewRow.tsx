@@ -27,6 +27,7 @@ export type TranscriptViewRowProps =
 const OPTIONS: readonly { id: TranscriptViewMode; label: ChatKey }[] = [
   { id: 'normal', label: 'settings.transcript.normal' },
   { id: 'compact', label: 'settings.transcript.compact' },
+  { id: 'minimal', label: 'settings.transcript.minimal' },
 ]
 
 /**
@@ -37,9 +38,11 @@ const OPTIONS: readonly { id: TranscriptViewMode; label: ChatKey }[] = [
 export function TranscriptViewRow({ useTranscriptView, setTranscriptView, t }: TranscriptViewRowProps) {
   const mode = useTranscriptView(value => value)
   const [open, setOpen] = useState(false)
-  const selectedLabel = mode === 'normal'
+  const selectedLabel: ChatKey = mode === 'normal'
     ? 'settings.transcript.normal'
-    : 'settings.transcript.compact'
+    : mode === 'compact'
+      ? 'settings.transcript.compact'
+      : 'settings.transcript.minimal'
   const closeMenu = () => { setOpen(false) }
   const selectMode = (id: string) => {
     closeMenu()

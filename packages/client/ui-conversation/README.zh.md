@@ -15,6 +15,7 @@ kind: "package-reference"
 
 - [Conversation 组装](#conversation-assembly)
 - [Shell 与标准 props](#shell-and-standard-props)
+- [草稿提交上下文](#draft-submission-contexts)
 - [临时 composer entry](#temporary-composer-entries)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
@@ -36,6 +37,8 @@ target package 通过 declaration merge 扩展 snapshot 与 Location data map，
 <a id="shell-and-standard-props"></a>
 ## Shell 与标准 props
 
+Host 插件接受 `showCommandLauncher`（默认 `true`），作为 `ui-conversation` 设置的基础值。显式保存的字段覆盖基础值。该值为 `false` 时浏览器隐藏命令菜单按钮，但不禁用手动输入的斜杠命令、键盘提交或插件持有的输入控件。按钮在首次设置读取完成后才显示。
+
 本包注册 optional-Session `conversation` shell、strict Session header/body、View list、composer chain 与 bar、输入区域、Hero 区域、queue dock、草稿持久化和 phase 计算。`ctx.uiSession.provide()` 从同一个 Session binding 物化 Conversation 与 input source，并将 `inputActions` 作为稳定标准 prop 提供。
 
 View 选择规则固定：有效且已注册的持久化选择优先，其次是已注册的 `chat`，否则不渲染 View；绝不选择第一个已注册 View。Shell phase 只组合 Session lifecycle 与 active-target set，不读取任何 target-specific snapshot。
@@ -47,6 +50,11 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 默认发送采用乐观提交：Enter 在同一事务里清空草稿、occurrence 表和撤销历史，composer 保持 `plain`，发送作为 detached attempt 运行，发送期间可以继续输入和提交。`sendSession` 在序列化之前用投递模式注册 Session 提交回显（`session.beginSubmission`）；Session 根据该模式与当前运行状态推导位置，因此空闲发送进入 transcript，繁忙时 Queue 进入 QueueDock，繁忙时 Steer 进入 pending-steering 区域。随后让出一帧，图片经浏览器原生 `FileReader` data-URL 路径编码。多个并发发送失败时，在用户编辑还原内容之前按提交顺序合并还原；命令提交保持冻结的 `submitting` 阶段。Detached attempt 持有图片 id，直到 admission 完成或 Session scope 销毁。回显以 observed 退休时，durable 图片缓存立即公开预览 URL，同时读取 admitted 附件，随后用规范化 URL 替换预览，并在两个 URL 各自停止使用后撤销。直接 subagent continuation 不创建本地回显，因为其 transport 不保留浏览器 request id。
 
 普通 composer 运行时，如果草稿为空或输入不可用，主指针操作保持为 Stop。可提交的文字或附件会把同一位置切换为 Queue Send；清空或成功提交草稿后恢复 Stop。繁忙态 Enter 设置继续选择 Queue 或 Steer 键盘操作。可继续 subagent 保留独立的 Send 与 Stop 操作（[决策](../../../.agents/notes/implemented/bug-fix/2026-08-20-running-draft-primary-send.zh.md)）。
+
+<a id="draft-submission-contexts"></a>
+## 草稿提交上下文
+
+浏览器插件可以通过 `conversation.draftContexts` 注册按会话寻址的 source。条目在普通 prompt 开始前留在 Lexical 外部，随后 Session Controller 会把每项文本作为插件来源的 user message 记录在 prompt 前。已接纳的发送会退休条目；被拒绝的发送和 Session 释放会把条目还给 source。[决策](../../../.agents/notes/implemented/architecture/2026-09-03-draft-submission-contexts.zh.md) 定义完整生命周期与模型可见来源。
 
 <a id="temporary-composer-entries"></a>
 ## 临时 composer entry

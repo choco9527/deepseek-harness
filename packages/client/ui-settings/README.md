@@ -33,6 +33,8 @@ A feature calls `ctx.settingsScope.bind(spec)` with a per-namespace spec and get
 
 ### Filling the settings slots
 
+The `settings.close` owner supplies `presentation: 'modal' | 'page'` so its label registrant can distinguish dialog dismissal from returning to the application. Settings sections keep the same `close()` callback in either presentation; the shell owns geometry and focus restoration.
+
 A settings surface registers into the slot types this package declares. The shell (`sidebar.settings` occupant, navigation, chrome) lives in ui-settings-general; feature pages register `settings.section` contributions; the Plugins section hosts `settings.plugins.tab` pages; onboarding steps register `settings.onboarding`. Cross-namespace surfaces (schema introspection, the served-namespace directory, `hasDocument`) read the same mirror through `ctx.settingsScope.describe()`.
 
 ### Observable success and failures

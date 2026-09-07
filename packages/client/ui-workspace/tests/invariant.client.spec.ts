@@ -10,9 +10,10 @@ describe('invariant companion', () => {
     await expect(ctx.plugin(WorkspaceInvariant).await()).resolves.toBeDefined()
   })
 
-  it('node-half apply is a no-op host placeholder', async () => {
+  it('loads without a Host settings provider', async () => {
     const { apply } = await import('@deepseek-ai/dsh-client-ui-workspace')
-    apply()
-    expect(true).toBe(true) // reaching here without throw is the contract
+    const ctx = new Context()
+    await ctx.plugin({ apply }).await()
+    await ctx.fiber.dispose()
   })
 })

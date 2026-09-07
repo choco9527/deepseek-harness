@@ -8,7 +8,7 @@ import type {
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { StatsLine, deriveStats, formatDuration, type StatsLineProps } from '../src/client/chat/StatsLine.tsx'
+import { ConfiguredStatsLine, StatsLine, deriveStats, formatDuration, type StatsLineProps } from '../src/client/chat/StatsLine.tsx'
 import { formatTokens } from '../src/client/chat/token-format.ts'
 import { en, zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
@@ -136,6 +136,17 @@ describe('formatters', () => {
 })
 
 describe('StatsLine', () => {
+  it('does not read statistics while their presentation is hidden', () => {
+    const useChat = vi.fn(() => { throw new Error('hidden statistics must not mount') })
+    const view = render(<ConfiguredStatsLine
+      useChat={useChat}
+      useProjection={() => undefined}
+      usePresentation={selector => selector({ status: 'ready', value: { transcriptView: 'minimal', showComposerStats: false }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' })}
+      t={t}
+    />)
+    expect(view.container.textContent).toBe('')
+    expect(useChat).not.toHaveBeenCalled()
+  })
   const USAGE = { uncachedInputTokens: 10, outputTokens: 5, cacheReadTokens: 90, cacheWriteTokens: 0 }
 
   /** A whole-log sessionStats value: zeros plus overrides. */

@@ -60,6 +60,8 @@ export type ContextForm =
   | 'relay'
   /** Material lifted out of another session's log, possibly reduced on the way in. */
   | 'recall'
+  /** Text a person selected as additional context for the message they are sending. */
+  | 'annotation'
 
 /** One named contribution to a `snapshot`-form context, in assembly order. */
 export interface ContextSnapshotSection {
@@ -94,6 +96,11 @@ export type ContextFormed =
   }
   | { readonly form: 'relay' }
   | { readonly form: 'recall' }
+  | {
+    readonly form: 'annotation'
+    /** Request identity shared with the user message this annotation accompanies. */
+    readonly submissionId: string
+  }
 
 /**
  * Where a message (or injected content) came from.

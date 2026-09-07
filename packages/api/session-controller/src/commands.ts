@@ -37,6 +37,7 @@ import type {
   SessionForkValue,
   SessionPromptRequest,
   SessionPromptValue,
+  PromptContext,
   SessionRenameRequest,
   SessionRenameValue,
   SessionSelectModelRequest,
@@ -49,6 +50,19 @@ interface SessionReadState {
   readonly id: SessionId
   readonly header: SessionHeader
   readonly events: SessionEvent[]
+}
+
+/** Reject malformed browser-supplied plugin context before it reaches Agent state. */
+function promptContexts(value: readonly PromptContext[] | undefined): readonly PromptContext[] {
+  if (value === undefined) return []
+  for (const context of value) {
+    const form: unknown = context.form
+    if (typeof context.plugin !== 'string' || context.plugin.trim() === '' || typeof context.text !== 'string'
+      || (form !== undefined && form !== 'annotation')) {
+      throw new RemoteError('gateway/bad-request', 'prompt contexts require a non-empty plugin, text, and known form', {})
+    }
+  }
+  return value
 }
 
 /** Implements Session business commands delegated by the Session Controller Remote service. */
@@ -291,6 +305,7 @@ export class SessionCommandController {
         { value: request.clientTimeZone },
       )
     }
+    const contexts = promptContexts(request.contexts)
     const agent = await this.resolveAgent(request.sessionId)
     const selection = this.agents.selectionFor(agent).current
     if (!routeServed(this.ctx, selection.provider)) {
@@ -321,6 +336,19 @@ export class SessionCommandController {
         }
         const content = await admitPromptContent(this.ctx.attachments, request.content)
         const message: UserMessage = createUserMessage({ content, source })
+        for (const context of contexts) {
+          agent.inject(createUserMessage({
+            content: [{ type: 'text', text: context.text }],
+            source: context.form === undefined
+              ? { kind: 'plugin', plugin: context.plugin }
+              : {
+                kind: 'plugin',
+                plugin: context.plugin,
+                form: context.form,
+                submissionId: String(request.requestId),
+              },
+          }))
+        }
         if (request.mode === 'steer') agent.steer(message)
         else agent.followup(message)
       } catch (error) {

@@ -230,6 +230,7 @@ export function ChatView({
   const loadingOlder = useSession(s => s.loadingOlder)
   const selectedCallId = useStore(s => s.selection?.callId)
   const compactTranscript = useTranscriptView(mode => mode === 'compact')
+  const minimalTranscript = useTranscriptView(mode => mode === 'minimal')
   const inspectCall = useCallback((callId: string) => {
     openView('trajectory', callId)
   }, [openView])
@@ -747,6 +748,7 @@ export function ChatView({
               nodeKey={nodeKey}
               historyIncomplete={hasMore}
               compactTranscript={compactTranscript}
+              minimalTranscript={minimalTranscript}
               useChat={useChat}
               useStore={useStore}
               actions={actions}

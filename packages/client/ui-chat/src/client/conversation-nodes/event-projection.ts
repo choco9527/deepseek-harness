@@ -36,7 +36,7 @@ function joined(names: string[]): string | null {
 
 /** Forms Chat presents structurally; unknown merge-extensible values remain opaque. */
 const KNOWN_FORMS: readonly KnownContextForm[] = [
-  'instructions', 'catalog', 'snapshot', 'notice', 'relay', 'recall',
+  'instructions', 'catalog', 'snapshot', 'notice', 'relay', 'recall', 'annotation',
 ]
 
 /**

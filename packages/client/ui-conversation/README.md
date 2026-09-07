@@ -15,6 +15,7 @@ English | [中文](README.zh.md)
 
 - [Conversation assembly](#conversation-assembly)
 - [Shell and standard props](#shell-and-standard-props)
+- [Draft submission contexts](#draft-submission-contexts)
 - [Temporary composer entries](#temporary-composer-entries)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
@@ -36,6 +37,8 @@ Target packages declaration-merge their snapshot and Location data maps, then re
 <a id="shell-and-standard-props"></a>
 ## Shell and standard props
 
+The Host plugin accepts `showCommandLauncher` (default `true`) as the `ui-conversation` settings base. Explicit saved fields override that base. The browser hides the command-menu button when this value is `false`, without disabling typed slash commands, keyboard submission, or plugin-owned input controls. The button waits for the initial settings read before appearing.
+
 The package registers the optional-Session `conversation` shell, strict Session header/body entries, View list, composer chain and bar, input regions, Hero regions, queue dock, draft persistence, and phase calculation. `ctx.uiSession.provide()` materializes the Conversation and input sources from the same Session binding and supplies `inputActions` as a stable standard prop.
 
 View selection is deterministic: a registered persisted selection wins, otherwise registered `chat` wins, otherwise no View renders. It never chooses the first registered View. Shell phase combines Session lifecycle with the active-target set; no target-specific snapshot is read by the shell.
@@ -47,6 +50,11 @@ The resident composer survives no-Session and Session transitions. The no-Sessio
 Default sends commit optimistically: Enter clears the draft, occurrence table, and undo history in the same transaction, keeps the composer in `plain`, and runs the send as a detached attempt, so typing and further sends continue during the flight. `sendSession` registers a Session submission echo (`session.beginSubmission`) with the delivery mode before serializing; Session derives the placement from that mode and its current running state, so idle sends use the transcript, busy Queue sends use QueueDock, and busy Steer sends use the pending-steering surface. It then yields one paint and encodes images through the browser's native `FileReader` data-URL path. Concurrent failures are restored together in submission order until the user edits the restored content; command submissions keep the frozen `submitting` phase. Detached attempts retain their image ids through admission and Session scope disposal. When an echo retires as observed, the durable image cache exposes its preview immediately, fetches the admitted attachment, replaces the preview with the canonical URL, and revokes each URL after its use ends. Direct subagent continuations skip local echoes because their transport does not preserve the browser request id.
 
 While a normal composer is running, its primary pointer action remains Stop when the draft is empty or input is unavailable. Actionable text or attachments switch the same seat to Queue Send; clearing or successfully submitting the draft restores Stop. The busy-Enter setting continues to select the Queue or Steer keyboard action. Continuable subagents keep separate Send and Stop actions ([decision](../../../.agents/notes/implemented/bug-fix/2026-08-20-running-draft-primary-send.md)).
+
+<a id="draft-submission-contexts"></a>
+## Draft submission contexts
+
+A browser plugin can register a session-addressed source through `conversation.draftContexts`. Its items remain outside Lexical until an ordinary prompt begins, then Session Controller records each text item as a plugin-source user message before the prompt. Accepted sends retire the items; refused sends and Session disposal return them to their source. The [decision](../../../.agents/notes/implemented/architecture/2026-09-03-draft-submission-contexts.md) defines the lifecycle and model-visible provenance.
 
 <a id="temporary-composer-entries"></a>
 ## Temporary composer entries

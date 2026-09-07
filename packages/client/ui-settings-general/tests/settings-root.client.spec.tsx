@@ -20,7 +20,7 @@ const SEAT_CONTENT: Record<string, string> = {
   'settings.trigger': 'Settings',
   'settings.header': 'Settings Title',
   'settings.action': 'Open configuration file',
-  'settings.close': 'Close',
+  'settings.close': 'Back to app',
 }
 
 type AttentionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useSessionPendingInteraction']>[0]>[0]
@@ -30,6 +30,7 @@ const useSessionPendingInteraction: SettingsRootComponentProps['useSessionPendin
 
 function mount({
   wide = true,
+  presentation = 'page',
   connectionState = 'connected',
   onboardingActive = true,
   rows = [
@@ -43,6 +44,7 @@ function mount({
   ],
 }: {
   wide?: boolean
+  presentation?: 'modal' | 'page'
   connectionState?: ConnectionSnapshot
   onboardingActive?: boolean
   rows?: Row[]
@@ -57,6 +59,7 @@ function mount({
   const reconnect = vi.fn()
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string }) => {
+      if (key === 'settings.close' && (_owner as { presentation?: string }).presentation === 'modal') return 'Close settings'
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
       return SEAT_CONTENT[key]
     }) as SettingsRootComponentProps['renderSlot'],
@@ -74,6 +77,7 @@ function mount({
     useSessionPendingInteraction,
     useWorkspaces: unusedHook,
     wide,
+    usePresentation: selector => selector({ status: 'ready', value: { presentation }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' }),
     reconnect,
     t: makeTranslate(en),
     useConnectionState: (select) => {
@@ -168,7 +172,46 @@ describe('SettingsRoot trigger', () => {
   })
 })
 
-describe('SettingsPanel chrome seats', () => {
+describe('SettingsPage chrome seats', () => {
+  it('keeps the presentation snapshot limited to chrome and shared section content', () => {
+    const surfaces = (['modal', 'page'] as const).map((presentation) => {
+      mount({ presentation, onboardingActive: false })
+      openPanel()
+      const dialog = screen.getByRole('dialog')
+      const result = {
+        presentation,
+        buttons: [...dialog.querySelectorAll('button')].map(button => button.textContent),
+        section: screen.getByTestId('section-general').dataset.testid,
+      }
+      cleanup()
+      return result
+    })
+    expect(surfaces).toMatchInlineSnapshot(`
+      [
+        {
+          "buttons": [
+            "General",
+            "Models",
+            "Agent presets",
+            "Close settings",
+          ],
+          "presentation": "modal",
+          "section": "section-general",
+        },
+        {
+          "buttons": [
+            "Back to app",
+            "General",
+            "Models",
+            "Agent presets",
+          ],
+          "presentation": "page",
+          "section": "section-general",
+        },
+      ]
+    `)
+  })
+
   it('names the dialog via aria-labelledby pointing at the header seat node', () => {
     mount()
     openPanel()
@@ -180,15 +223,16 @@ describe('SettingsPanel chrome seats', () => {
     expect(screen.getByRole('dialog', { name: 'Settings Title' })).toBeTruthy()
   })
 
-  it('names the close button through the visually-hidden close seat text', () => {
+  it('renders the return seat as the visible back action', () => {
     mount()
     openPanel()
-    const close = screen.getByRole('button', { name: 'Close' })
-    expect(close.hasAttribute('aria-label')).toBe(false)
-    expect(close.textContent).toContain('Close')
+    const back = screen.getByRole('button', { name: 'Back to app' })
+    expect(back.hasAttribute('aria-label')).toBe(false)
+    expect(back.textContent).toBe('Back to app')
+    expect(back.querySelector('svg')).toBeTruthy()
   })
 
-  it('renders header actions before the shell-owned close control', () => {
+  it('renders header actions in the page content column', () => {
     const { renderSlot } = mount()
     openPanel()
     expect(screen.getByText('Open configuration file')).toBeTruthy()
@@ -196,25 +240,41 @@ describe('SettingsPanel chrome seats', () => {
   })
 })
 
-describe('SettingsPanel close paths', () => {
-  it('closes via the header button and restores trigger focus', async () => {
+describe('SettingsPage return paths', () => {
+  it('shares sections in modal presentation and supports Close and mask dismissal', () => {
+    mount({ presentation: 'modal' })
+    const trigger = openPanel()
+    expect(screen.queryByRole('button', { name: 'Back to app' })).toBeNull()
+    expect(screen.getByTestId('section-general')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }))
+    expect(screen.getByTestId('section-models')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    openPanel()
+    const mask = screen.getByRole('dialog').parentElement!.firstElementChild!
+    fireEvent.click(mask)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    openPanel()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+  it('returns via the navigation action and restores trigger focus', async () => {
     mount()
     const trigger = openPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back to app' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     await vi.waitFor(() => { expect(document.activeElement).toBe(trigger) })
   })
 
-  it('closes via a mask click and restores trigger focus', async () => {
+  it('does not render a dismissible mask around the page', () => {
     mount()
-    const trigger = openPanel()
+    openPanel()
     const dialog = screen.getByRole('dialog')
-    fireEvent.click(dialog.parentElement!.firstElementChild!)
-    expect(screen.queryByRole('dialog')).toBeNull()
-    await vi.waitFor(() => { expect(document.activeElement).toBe(trigger) })
+    expect(dialog.parentElement?.children).toHaveLength(1)
   })
 
-  it('closes via document-level Escape, restores trigger focus, and unhooks the listener', async () => {
+  it('returns via document-level Escape, restores trigger focus, and unhooks the listener', async () => {
     mount()
     const trigger = openPanel()
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -228,14 +288,14 @@ describe('SettingsPanel close paths', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
   })
 
-  it('lands focus on the close button when the dialog opens', () => {
+  it('lands focus on the return action when the page opens', () => {
     mount()
     openPanel()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Back to app' }))
   })
 })
 
-describe('SettingsPanel navigation', () => {
+describe('SettingsPage navigation', () => {
   it('projects rows, marks the first active, and renders only that section', () => {
     mount()
     openPanel()

@@ -28,6 +28,7 @@ async function bench() {
   const fiber = runtime.ctx.plugin(ConversationController, {
     input: hub,
     blocks: new ComposerBlockRegistry(),
+    draftContexts: hub.draftContexts,
   })
   await fiber.await()
   const root = runtime.ctx.get('conversation') as ConversationController
@@ -144,9 +145,11 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
     // No Client Sessions service at all: a bare context lacks the assembled controller.
     const bare = new Context()
+    const bareInput = new InputHub(bare, makeTranslate(zh, {}))
     await bare.plugin(ConversationController, {
-      input: new InputHub(bare, makeTranslate(zh, {})),
+      input: bareInput,
       blocks: new ComposerBlockRegistry(),
+      draftContexts: bareInput.draftContexts,
     }).await()
     const orphan = bare.get('conversation') as ConversationController
     await expect(orphan.send('x')).rejects.toThrow(/sessions service unavailable/)
@@ -199,6 +202,7 @@ describe('sendSession submission echo', () => {
         'queue',
         undefined,
         'req-echo',
+        undefined,
       )
       // The draft stays registered until the echo's observed retirement.
       expect(b.root.draftImages([attachment!.id])).toHaveLength(1)
@@ -315,7 +319,7 @@ describe('sendSession submission echo', () => {
     try {
       const session = b.runtime.sessions.binding('s1')!.session
       await expect(b.root.sendSession(session, '纯文本', [], 'queue')).resolves.toEqual({ kind: 'success' })
-      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '纯文本' }], 'queue', undefined, 'req-echo')
+      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '纯文本' }], 'queue', undefined, 'req-echo', undefined)
     } finally {
       vi.unstubAllGlobals()
       b.restore()
@@ -331,7 +335,7 @@ describe('sendSession submission echo', () => {
       const sending = b.root.sendSession(session, '后台标签', [], 'queue')
       expect(b.prompt).not.toHaveBeenCalled()
       await expect(sending).resolves.toEqual({ kind: 'success' })
-      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '后台标签' }], 'queue', undefined, 'req-echo')
+      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '后台标签' }], 'queue', undefined, 'req-echo', undefined)
     } finally {
       vi.unstubAllGlobals()
       b.restore()

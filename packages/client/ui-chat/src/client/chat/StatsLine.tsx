@@ -5,7 +5,9 @@
 import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotSelectorHook, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ChatSettings } from '../../chat-settings.ts'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
@@ -115,11 +117,26 @@ export function billedInputTokens(usage: TokenUsageProjection): number {
 }
 
 /** Props: the conversation-snapshot selector plus the projection read seat. */
+export interface StatsLineInjected {
+  /** Host-backed display preferences. */
+  hooks: { presentation: SettingsScope<ChatSettings> }
+}
+
 export interface StatsLineProps {
   useChat: SnapshotSelectorHook<ChatSnapshot>
   useProjection: UseProjection
   /** The owning dock's locale seat. */
   t: ChatViewSlotProps['t']
+}
+
+/**
+ * Render statistics only after the composition's display preference is known.
+ * @param props - Statistics selectors and the host-backed display preference.
+ * @returns Statistics row, or null while loading or hidden.
+ */
+export function ConfiguredStatsLine({ usePresentation, ...props }: StatsLineProps & InjectFace<StatsLineInjected>) {
+  const visible = usePresentation(s => s.status !== 'loading' && s.value?.showComposerStats !== false)
+  return visible ? <StatsLine {...props} /> : null
 }
 
 export const StatsLine = memo(function StatsLine({ useChat, useProjection, t }: StatsLineProps) {

@@ -21,6 +21,7 @@ import type {
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
+import { DraftContextRegistry, type CapturedDraftContexts } from './draft-contexts.ts'
 
 /** Structural command face for per-session popup resolution. */
 interface CommandFace {
@@ -41,6 +42,7 @@ interface ConversationAttachmentFace {
     imageIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal?: AbortSignal,
+    contexts?: readonly import('@deepseek-ai/dsh-api-session-controller/types').PromptContext[],
   ): Promise<SubmitOutcome>
   serializeDraftImages(imageIds: readonly DraftAttachmentId[]): Promise<readonly SubmitImageAttachment[]>
   releaseDraftImage(id: DraftAttachmentId): void
@@ -49,6 +51,8 @@ interface ConversationAttachmentFace {
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
   private readonly shells = new Map<SessionId, SessionInputShell>()
+  /** Plugin-owned context captured only when the resident composer submits. */
+  readonly draftContexts = new DraftContextRegistry()
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -88,7 +92,9 @@ export class InputHub implements SessionInputResolver {
       inputTriggers: () => this.controller(actx),
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
-      defaultSink: (text, imageIds, mode, signal) => this.sink(session, text, imageIds, mode, signal),
+      defaultSink: (text, imageIds, mode, signal, contexts) => this.sink(session, text, imageIds, mode, signal, contexts),
+      hasDraftContexts: () => this.draftContexts.has(id),
+      draftContexts: () => this.draftContexts.take(id),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandImages: {
         serialize: ids => this.conversation().serializeDraftImages(ids),
@@ -178,9 +184,12 @@ export class InputHub implements SessionInputResolver {
     imageIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
+    contexts: CapturedDraftContexts | undefined,
   ): Promise<SubmitOutcome> {
-    if (text === '' && imageIds.length === 0) return Promise.resolve({ kind: 'success' })
-    return this.conversation().sendSession(session, text, imageIds, mode, signal)
+    if (text === '' && imageIds.length === 0 && (contexts === undefined || contexts.contexts.length === 0)) {
+      return Promise.resolve({ kind: 'success' })
+    }
+    return this.conversation().sendSession(session, text, imageIds, mode, signal, contexts?.contexts)
   }
 
   /**

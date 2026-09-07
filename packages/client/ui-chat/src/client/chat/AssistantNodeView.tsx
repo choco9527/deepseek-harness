@@ -20,11 +20,7 @@ export const AssistantNodeView = memo(function AssistantNodeView({
     () => owner === undefined ? undefined : fileMentions(owner),
     [fileMentions, owner],
   )
-  const reasoningHidden = turnProcess !== undefined
-    && turnProcess.foldable
-    && turnProcess.spec.answerStep === data.step
-    && turnProcess.spec.inlineReasoning
-    && !turnProcess.open
+  const reasoningHidden = turnProcess?.hideReasoning ?? false
   const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
   return (
     <AssistantMarkdown

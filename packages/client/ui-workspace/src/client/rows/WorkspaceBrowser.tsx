@@ -821,9 +821,12 @@ export function WorkspaceBrowser({
   searchResultLimit,
   useDirectoryFlow,
   useHostInfo,
+  usePresentation,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
+  const showSearch = usePresentation(s => s.status !== 'loading' && s.value?.showSessionSearch !== false)
+  const showGrouping = usePresentation(s => s.status !== 'loading' && s.value?.showGroupingControls !== false)
   const home = useHostInfo(info => info.home)
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
@@ -1075,7 +1078,7 @@ export function WorkspaceBrowser({
             {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
           </span>
         )}
-        {wide && (
+        {showSearch && wide && (
           <div className={clsx(css.searchSlot, searchExpanded && css.searchSlotExpanded)}>
             <div
               ref={searchRoot}
@@ -1133,7 +1136,7 @@ export function WorkspaceBrowser({
           </div>
         )}
         <div className={clsx(css.headerActions, wide && searchExpanded && css.headerActionsHidden)}>
-          {wide && (
+          {showGrouping && wide && (
             <ViewOptionsMenu
               groupBy={groupBy}
               orderBy={orderBy}
@@ -1180,8 +1183,7 @@ export function WorkspaceBrowser({
         />
       </div>
 
-      {/* The collapsed rail keeps search as its own 36px control. */}
-      {!wide && <div className={css.search}>
+      {showSearch && !wide && <div className={css.search}>
         <Tooltip label={t('search')}>
           <button
             type="button"

@@ -43,11 +43,11 @@ describe('chrome content', () => {
     expect(screen.queryByText('Settings')).toBeNull()
   })
 
-  it('HeaderContent and CloseLabel render their translated text', () => {
+  it('HeaderContent and CloseLabel render the page and return text', () => {
     render(<HeaderContent {...kit} t={t} />)
     render(<CloseLabel {...kit} t={t} />)
     expect(screen.getByText('Settings')).toBeTruthy()
-    expect(screen.getByText('Close')).toBeTruthy()
+    expect(screen.getByText('Back to app')).toBeTruthy()
   })
 })
 

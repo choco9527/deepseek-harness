@@ -27,9 +27,9 @@ function noPendingInteraction() {
   return bindSnapshotSelector(createSnapshotStore<SessionPendingInteractionSnapshot>(new Map()))
 }
 
-function mount(mode: 'normal' | 'compact' = 'compact') {
+function mount(mode: 'normal' | 'compact' | 'minimal' = 'compact') {
   const source = createSnapshotStore(mode)
-  const setTranscriptView = vi.fn((next: 'normal' | 'compact') => { source.set(next) })
+  const setTranscriptView = vi.fn((next: 'normal' | 'compact' | 'minimal') => { source.set(next) })
   const props: TranscriptViewRowProps = {
     useSessions: emptySessions(),
     useSessionPendingInteraction: noPendingInteraction(),
@@ -60,5 +60,12 @@ describe('TranscriptViewRow', () => {
     expect(screen.getByRole('menuitem', { name: 'Compact' })).toBeDefined()
     fireEvent.pointerDown(document.body)
     expect(screen.queryByRole('menuitem', { name: 'Compact' })).toBeNull()
+  })
+
+  it('offers Minimal as the process-hiding mode', () => {
+    const b = mount('minimal')
+    fireEvent.click(screen.getByRole('button', { name: /Minimal/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Compact' }))
+    expect(b.setTranscriptView).toHaveBeenCalledWith('compact')
   })
 })

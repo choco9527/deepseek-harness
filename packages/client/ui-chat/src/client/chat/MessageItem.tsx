@@ -2,9 +2,10 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { JsonBlock, projectUserText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconContextInjectionOutline16, JsonBlock, projectUserText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
+import type { PromptAnnotation } from '../conversation-nodes/message.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
@@ -146,9 +147,49 @@ function TurnMaxTokensItem({ t }: {
   )
 }
 
+/** Hover preview of selected text associated with one submitted user message. */
+function AnnotationSummary({ annotations, t }: {
+  annotations: readonly PromptAnnotation[]
+  t: ChatViewSlotProps['t']
+}) {
+  const [open, setOpen] = useState(false)
+  const count = annotations.length
+  const countLabel = t(count === 1 ? 'message.annotations.one' : 'message.annotations.other', { count })
+  return (
+    <div
+      className={css.annotationSummary}
+      onMouseEnter={() => { setOpen(true) }}
+      onMouseLeave={() => { setOpen(false) }}
+    >
+      <button
+        type="button"
+        className={css.annotationTrigger}
+        aria-expanded={open}
+        aria-label={t('message.annotations.expand', { count })}
+        onFocus={() => { setOpen(true) }}
+        onBlur={() => { setOpen(false) }}
+      >
+        <span aria-hidden><IconContextInjectionOutline16 size={16} /></span>
+        <span>{countLabel}</span>
+      </button>
+      {open && <div className={css.annotationCard}>
+        {annotations.map((annotation, index) => (
+          <div className={css.annotationItem} key={`${index}:${annotation.text}`}>
+            <span className={css.annotationIndex}>{index + 1}.</span>
+            <div className={css.annotationContent}>
+              <div className={css.annotationLabel}>{t('message.annotations.selectedText')}</div>
+              <div className={css.annotationText} data-message-annotation-text>{annotation.text}</div>
+            </div>
+          </div>
+        ))}
+      </div>}
+    </div>
+  )
+}
+
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], previewImages, reveal = 'always', t,
+  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], annotations = [], previewImages, reveal = 'always', t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -160,6 +201,8 @@ function UserStyleBubble({
   echo?: boolean
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
+  /** Plugin-owned selected text recorded with this submitted message. */
+  annotations?: readonly PromptAnnotation[]
   /** Local submission-echo previews replacing the content-derived image group. */
   previewImages?: readonly MessageImageSource[]
   /** Whole actions-row visibility: earlier rows reveal on hover, the latest stays shown (turn tails' gate). */
@@ -178,6 +221,7 @@ function UserStyleBubble({
       data-actions-reveal={reveal}
     >
       <div className={css.userStack}>
+        {annotations.length > 0 && <AnnotationSummary annotations={annotations} t={t} />}
         {renderMessageImages({ images, align: 'end' })}
         {showBubble && <div className={css.bubble}>
           {projectUserText(text, referenceLabels)}
@@ -291,6 +335,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       content={data.content}
       renderMessageImages={renderMessageImages}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
+      {...data.annotations === undefined ? {} : { annotations: data.annotations }}
       reveal={isLatestUserRow ? 'always' : 'hover'}
       t={t}
       actions={text => (

@@ -1,5 +1,7 @@
 /** Target-neutral Conversation slot declarations and composed component props. */
 import type { ReactNode, RefObject } from 'react'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConversationSettings } from '../../submission-settings.ts'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -281,6 +283,8 @@ export interface ComposerBarInjected {
   command: ((line: string) => Promise<boolean>) | undefined
   hooks: {
     notices: ObservableSnapshot<InputNotice | null>
+    /** Host-backed composer display preferences. */
+    presentation: SettingsScope<ConversationSettings>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     menuLauncher: ObservableSnapshot<string | null>
   }

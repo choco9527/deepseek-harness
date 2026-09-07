@@ -25,6 +25,8 @@ import type {
   DraftAttachmentId, SessionInputResolver, SubmitImageAttachment, SubmitOutcome,
 } from './contract/input.ts'
 import type { InputSubmitMode } from './contract/composer-submission.ts'
+import type { PromptContext } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { DraftContextRegistry } from './input/draft-contexts.ts'
 
 /**
  * The outward conversation face (`ctx.conversation`): the scope-addressed
@@ -39,6 +41,8 @@ export interface IConversation {
    * cannot import makes a session's input inert with its own reason.
    */
   readonly blocks: ComposerBlocks
+  /** Plugin-owned draft context captured only when the resident composer submits. */
+  readonly draftContexts: DraftContextRegistry
   /**
    * Send a prompt into the caller scope's session (queued turn).
    * @param text - prompt text, sent verbatim as one text block.
@@ -149,6 +153,8 @@ export class ConversationController extends Service implements IConversation {
   readonly input: SessionInputResolver
   /** The per-session composer-block registry. */
   readonly blocks: ComposerBlocks
+  /** Plugin-owned draft context captured only when the resident composer submits. */
+  readonly draftContexts: DraftContextRegistry
   private readonly draftAttachments = new Map<DraftAttachmentId, ComposerAttachment>()
 
   /**
@@ -158,10 +164,15 @@ export class ConversationController extends Service implements IConversation {
    * constructed by the plugin apply (the same instances the slot inject
    * factories close over).
    */
-  constructor(ctx: Context, config: { input: SessionInputResolver; blocks: ComposerBlocks }) {
+  constructor(ctx: Context, config: {
+    input: SessionInputResolver
+    blocks: ComposerBlocks
+    draftContexts: DraftContextRegistry
+  }) {
     super(ctx, 'conversation')
     this.input = config.input
     this.blocks = config.blocks
+    this.draftContexts = config.draftContexts
     ctx.effect(() => () => {
       for (const attachment of this.draftAttachments.values()) {
         revokePreview(attachment.previewUrl)
@@ -194,6 +205,7 @@ export class ConversationController extends Service implements IConversation {
    * @param imageIds - ordered draft-local attachment ids.
    * @param mode - queue or steer delivery selected by composer policy.
    * @param signal - optional cancellation for the complete Host admission.
+   * @param contexts - plugin-owned text injected before the prompt is admitted.
    * @returns the Host admission outcome; local attachment preparation failures reject.
    */
   async sendSession(
@@ -202,6 +214,7 @@ export class ConversationController extends Service implements IConversation {
     imageIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal?: AbortSignal,
+    contexts?: readonly PromptContext[],
   ): Promise<SubmitOutcome> {
     const attachments = this.draftImages(imageIds)
     if (attachments.length !== imageIds.length) {
@@ -209,6 +222,9 @@ export class ConversationController extends Service implements IConversation {
     }
     const snapshot = session.getSnapshot()
     if (snapshot.subagent !== null) {
+      if (contexts !== undefined && contexts.length > 0) {
+        throw new Error('conversation.sendSession: subagent prompts do not support plugin-owned draft context')
+      }
       const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
       const content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
       const result = await session.prompt(content, mode, signal)
@@ -241,7 +257,7 @@ export class ConversationController extends Service implements IConversation {
       submission.abandon()
       throw error
     }
-    const result = await session.prompt(content, mode, signal, submission.requestId)
+    const result = await session.prompt(content, mode, signal, submission.requestId, contexts)
     if (!result.ok) return { kind: 'error' }
     if (retirement !== undefined && (await retirement).reason !== 'observed') return { kind: 'error' }
     return { kind: 'success' }

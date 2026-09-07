@@ -1,20 +1,16 @@
 /**
- * Settings shell root: the sidebar-foot trigger row plus the centered modal
- * panel (figma 501:29947, 1080x700) with the section nav rail. The shell is
- * a pure composition face — every piece of text (trigger label, panel title,
- * close label, sections) arrives from registrants through slots; accessible
- * names resolve to that content (trigger: its own text; dialog:
- * aria-labelledby the title node; close: visually-hidden slot text). Modal
- * open state and the active section id are component-local viewing state;
+ * Settings shell root: the sidebar-foot trigger plus a modal or full-window
+ * page with shared section navigation. Every piece of text arrives from slot
+ * registrants. Open state and the active section id remain component-local;
  * the onboarding coordinator mounts exactly one ordered registrant while the
- * sessions-derived empty-Hero fact is active. Visible dialog chrome belongs
- * to the step, so a mounted-but-deciding step paints nothing here.
+ * sessions-derived empty-Hero fact is active. Visible onboarding chrome
+ * belongs to the step, so a mounted-but-deciding step paints nothing here.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  ConnectionIndicator,
-  IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
+  ConnectionIndicator, IconChevronLeftOutline14, IconCloseOutline16,
+  IconAgentPresetOutline16, IconDataOutline16,
   IconPersonalizationOutline16, IconSettingsOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConnectionIndicatorState } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -31,7 +27,8 @@ function navIcon(id: string) {
   return <IconSettingsOutline16 className={css.navIcon} size={16} />
 }
 
-type PanelProps = {
+type PageProps = {
+  presentation: 'modal' | 'page'
   rows: readonly SettingsSectionRow[]
   renderSlot: SettingsRootComponentProps['renderSlot']
   activeId: string | undefined
@@ -40,11 +37,11 @@ type PanelProps = {
 }
 
 /**
- * The modal layer: full-viewport mask + centered panel. Close paths: the
- * header button, a mask click, and document-level Escape (mounted only while
- * open, so the listener lifetime is the panel's).
+ * Shared settings content with modal or page chrome. Escape closes either
+ * presentation; the document listener exists only while settings is open.
  */
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
+function SettingsPage({ presentation, rows, renderSlot, activeId, onSelect, onClose }: PageProps) {
+  const isPage = presentation === 'page'
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
@@ -58,15 +55,19 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
     return () => { document.removeEventListener('keydown', onKeyDown) }
   }, [onClose])
 
-  // Entering the dialog focuses the close button; the root restores its trigger on close.
-  const closeButton = useRef<HTMLButtonElement | null>(null)
-  useEffect(() => { closeButton.current?.focus() }, [])
+  // Entering the page focuses Back; the root restores its trigger on return.
+  const backButton = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => { backButton.current?.focus() }, [])
 
   return (
-    <div className={css.overlay} role="presentation">
-      <div className={css.mask} aria-hidden="true" onClick={onClose} />
-      <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <div className={clsx(css.overlay, !isPage && css.modalOverlay)}>
+      {!isPage && <div className={css.mask} aria-hidden="true" onClick={onClose} />}
+      <div className={clsx(css.page, !isPage && css.modal)} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <nav className={css.nav}>
+          {isPage && <button ref={backButton} type="button" className={css.back} onClick={onClose}>
+            <IconChevronLeftOutline14 size={18} />
+            <span>{renderSlot('settings.close', { presentation })}</span>
+          </button>}
           <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
           <div className={css.navList}>
             {rows.map(row => (
@@ -86,10 +87,10 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
         <div className={css.content}>
           <div className={css.header}>
             <div className={css.actions}>{renderSlot('settings.action', {})}</div>
-            <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
+            {!isPage && <button ref={backButton} type="button" className={css.close} onClick={onClose}>
               <IconCloseOutline16 size={14} />
-              <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
-            </button>
+              <span className={css.hiddenLabel}>{renderSlot('settings.close', { presentation })}</span>
+            </button>}
           </div>
           <div className={css.options}>
             {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
@@ -107,9 +108,11 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
  */
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
-    wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t,
+    wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t, usePresentation,
   } = props
   const [open, setOpen] = useState(false)
+  const presentation = usePresentation(s => s.value?.presentation ?? 'modal')
+  const presentationLoading = usePresentation(s => s.status === 'loading')
   const [activeId, setActiveId] = useState<string | undefined>(undefined)
   const [completedOnboarding, setCompletedOnboarding] = useState<ReadonlySet<string>>(() => new Set())
   const [showRecovery, setShowRecovery] = useState(false)
@@ -186,6 +189,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           className={clsx(css.trigger, !wide && css.rail)}
           aria-haspopup="dialog"
           aria-expanded={open}
+          disabled={presentationLoading}
           onClick={() => { setOpen(true) }}
         >
           {renderSlot('settings.trigger', { wide })}
@@ -202,7 +206,8 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         />
       </div>
       {open && (
-        <SettingsPanel
+        <SettingsPage
+          presentation={presentation}
           rows={rows}
           renderSlot={renderSlot}
           activeId={activeId}

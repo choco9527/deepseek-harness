@@ -5,6 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatConversationViewNode, ChatNode } from '../contract/chat-nodes.ts'
 import { isRunningTool } from '../contract/chat-nodes.ts'
+import type { PromptAnnotation } from './message.ts'
 import type {
   ChatLocationNodeIndex, ChatNodeStore, ChatSnapshot, ChatTurnNavigationIndex, ConversationNode,
   LegacyConversationSlice, PartialAssistant, RunningToolCall, TurnNavigationItem,
@@ -17,9 +18,14 @@ const EMPTY_KEYS: readonly string[] = []
 const EMPTY_TURNS: readonly number[] = []
 const EMPTY_ITEMS: readonly TurnNavigationItem[] = []
 const EMPTY_LIST: readonly never[] = []
+const EMPTY_ANNOTATIONS: readonly PromptAnnotation[] = []
 
 function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function sameAnnotations(left: readonly PromptAnnotation[], right: readonly PromptAnnotation[]): boolean {
+  return left.length === right.length && left.every((value, index) => value.text === right[index]?.text)
 }
 
 class MutableChatNodeStore implements ChatNodeStore {
@@ -383,6 +389,109 @@ class ReferenceLabelProjector {
   }
 }
 
+function stringField(value: unknown, field: string): string | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const candidate = (value as Record<string, unknown>)[field]
+  return typeof candidate === 'string' && candidate !== '' ? candidate : undefined
+}
+
+function textContent(content: readonly unknown[]): string {
+  return content.flatMap((block) => {
+    if (typeof block !== 'object' || block === null || Array.isArray(block)) return []
+    const value = (block as Record<string, unknown>).text
+    return typeof value === 'string' ? [value] : []
+  }).join('')
+}
+
+function annotationContext(node: ChatConversationViewNode): {
+  readonly submissionId: string
+  readonly annotation: PromptAnnotation
+} | undefined {
+  const candidate = node as ChatNode
+  if (candidate.kind !== 'context' || stringField(candidate.data.source, 'form') !== 'annotation') return undefined
+  const submissionId = stringField(candidate.data.source, 'submissionId')
+  const text = textContent(candidate.data.content)
+  return submissionId === undefined || text === '' ? undefined : { submissionId, annotation: { text } }
+}
+
+function submittedMessageId(node: ChatConversationViewNode): string | undefined {
+  const candidate = node as ChatNode
+  if (candidate.kind !== 'user' && candidate.kind !== 'steering') return undefined
+  return stringField(candidate.data.source, 'rpcId')
+}
+
+function withAnnotations(
+  node: ChatConversationViewNode,
+  annotations: readonly PromptAnnotation[],
+): ChatConversationViewNode {
+  const candidate = node as ChatNode
+  if (candidate.kind !== 'user' && candidate.kind !== 'steering') return node
+  const current = candidate.data.annotations ?? EMPTY_ANNOTATIONS
+  const hasAnnotations = Object.hasOwn(candidate.data, 'annotations')
+  if (sameAnnotations(current, annotations) && hasAnnotations === (annotations.length > 0)) return node
+  const data: Record<string, unknown> = { ...candidate.data }
+  if (annotations.length === 0) delete data.annotations
+  else data.annotations = annotations
+  return { ...candidate, data }
+}
+
+/** Associates submitted user messages with their same-request annotation contexts. */
+class AnnotationProjector {
+  private readonly messagesBySubmissionId = new Map<string, string>()
+  private readonly annotationsBySubmissionId = new Map<string, Map<string, PromptAnnotation>>()
+
+  replace(nodes: readonly ChatConversationViewNode[]): readonly ChatConversationViewNode[] {
+    this.messagesBySubmissionId.clear()
+    this.annotationsBySubmissionId.clear()
+    for (const node of nodes) this.record(node)
+    return nodes.map((node) => {
+      const submissionId = submittedMessageId(node)
+      return submissionId === undefined
+        ? node
+        : withAnnotations(node, this.annotations(submissionId))
+    })
+  }
+
+  apply(
+    upserts: readonly ChatConversationViewNode[],
+    store: ChatNodeStore,
+  ): readonly ChatConversationViewNode[] {
+    const byKey = new Map(upserts.map(node => [node.key, node]))
+    const affected = new Set<string>()
+    for (const node of upserts) {
+      const messageId = submittedMessageId(node)
+      if (messageId !== undefined) affected.add(messageId)
+      const annotation = annotationContext(node)
+      if (annotation !== undefined) affected.add(annotation.submissionId)
+      this.record(node)
+    }
+    for (const submissionId of affected) {
+      const key = this.messagesBySubmissionId.get(submissionId)
+      if (key === undefined) continue
+      const node = byKey.get(key) ?? store.get(key)
+      if (node !== undefined) {
+        byKey.set(key, withAnnotations(node, this.annotations(submissionId)))
+      }
+    }
+    return [...byKey.values()]
+  }
+
+  private record(node: ChatConversationViewNode): void {
+    const submissionId = submittedMessageId(node)
+    if (submissionId !== undefined) this.messagesBySubmissionId.set(submissionId, node.key)
+    const annotation = annotationContext(node)
+    if (annotation === undefined) return
+    const annotations = this.annotationsBySubmissionId.get(annotation.submissionId) ?? new Map<string, PromptAnnotation>()
+    annotations.set(node.key, annotation.annotation)
+    this.annotationsBySubmissionId.set(annotation.submissionId, annotations)
+  }
+
+  private annotations(submissionId: string): readonly PromptAnnotation[] {
+    const annotations = this.annotationsBySubmissionId.get(submissionId)
+    return annotations === undefined ? EMPTY_ANNOTATIONS : [...annotations.values()]
+  }
+}
+
 interface LegacyContribution {
   readonly anchorSeq: number
   readonly nodes: readonly ConversationNode[]
@@ -633,6 +742,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
   private readonly navigation = new MutableTurnNavigationIndex()
   private readonly legacy = new LegacySliceBuilder()
   private readonly referenceLabels = new ReferenceLabelProjector()
+  private readonly annotations = new AnnotationProjector()
   private order: readonly string[] = EMPTY_KEYS
   /** Last published timeline: a Turn boundary can land without a new node. */
   private timeline: ConversationTimelineSnapshot | null = null
@@ -646,7 +756,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly nodes: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
-    const nodes = this.referenceLabels.replace(input.nodes)
+    const nodes = this.annotations.replace(this.referenceLabels.replace(input.nodes))
     this.store.replace(nodes)
     this.order = orderedVisibleChatNodes(nodes).map(node => node.key)
     this.locations.rebuild(this.order, this.store)
@@ -659,7 +769,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly upserts: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
-    const upserts = this.referenceLabels.apply(input.upserts, this.store)
+    const upserts = this.annotations.apply(this.referenceLabels.apply(input.upserts, this.store), this.store)
     let structural = false
     const contentOnly: ChatConversationViewNode[] = []
     for (const node of upserts) {

@@ -419,6 +419,9 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
       role="treeitem"
       aria-selected={selected}
       onClick={() => { onOpen(node.id) }}
+      onDoubleClick={() => {
+        if (!row.blank) onRename(node.id, row.title)
+      }}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
         ? undefined
@@ -479,6 +482,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
                 className={css.iconButton}
                 aria-label={t('actions.session.aria', { name: title })}
                 onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
+                onDoubleClick={(e) => { e.stopPropagation() }}
               >
                 <IconEllipsisOutline16 />
               </button>

@@ -175,6 +175,8 @@ export interface InputTarget {
   beginCommand(claim: CommandClaim, span: TokenSpan): boolean
   /** Replace the trigger span with one reference chip (span-CAS'd). */
   insertReference(ref: ReferenceInsert, span: TokenSpan): boolean
+  /** Remove one live reference chip by its shell-assigned occurrence identity. */
+  removeReference(occurrenceId: number): boolean
 }
 
 /** Per-session input facade owned by the conversation wiring layer. */
@@ -361,8 +363,8 @@ export type InputEvent =
   | { readonly type: 'draft-changed'; readonly draft: string }
   /** The editor applied a claim-token replacement: enter claimed. */
   | { readonly type: 'claim'; readonly claim: CommandClaim }
-  /** Enter submission with the current clipboard projection. */
-  | { readonly type: 'enter'; readonly mode: InputSubmitMode; readonly draft: string }
+  /** Enter submission with the current clipboard projection and optional plugin-owned context. */
+  | { readonly type: 'enter'; readonly mode: InputSubmitMode; readonly draft: string; readonly hasDraftContexts?: boolean }
   | { readonly type: 'adjudicated'; readonly attempt: SubmitAttempt; readonly outcome: PickOutcome }
   | { readonly type: 'adjudication-failed'; readonly attempt: SubmitAttempt; readonly message: string }
   /** Settlement carries the live clipboard projection for suffix-retention and claim re-entry decisions. */

@@ -85,6 +85,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     createWorkspace: vi.fn(async () => workspace('created', [])),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
     useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
+    usePresentation: selector => selector({ status: 'ready', value: { showSessionSearch: true, showGroupingControls: true }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' }),
     renderSlot: ((_name: string, owner: { open: boolean }) => (owner.open ? <div data-testid="directory-flow" /> : null)) as never,
     t,
     ...overrides,
@@ -100,6 +101,14 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it.each([true, false])('hides the search entry in sidebar width %s without hiding session rows', (wide) => {
+    const { view } = mount({
+      wide,
+      usePresentation: selector => selector({ status: 'ready', value: { showSessionSearch: false, showGroupingControls: false }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' }),
+    })
+    expect(view.queryByLabelText(t('search.sessions.aria'))).toBeNull()
+    expect(view.queryByRole('button', { name: t('viewOptions.label') })).toBeNull()
+  })
   it('workspace hover card shows a POSIX home descendant as ~', () => {
     vi.useFakeTimers()
     try {

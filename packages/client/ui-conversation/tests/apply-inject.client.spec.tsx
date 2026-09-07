@@ -185,7 +185,7 @@ describe('Conversation inject API', () => {
     expect(state.getSnapshot().draft).toBe('')
     await vi.waitFor(() => {
       expect(b.sessionFake.prompt).toHaveBeenCalledWith(
-        [{ type: 'text', text: 'hello' }], 'queue', expect.any(AbortSignal), expect.any(String),
+        [{ type: 'text', text: 'hello' }], 'queue', expect.any(AbortSignal), expect.any(String), undefined,
       )
     })
 
