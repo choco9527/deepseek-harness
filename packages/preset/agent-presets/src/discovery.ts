@@ -23,7 +23,7 @@
 
 import { existsSync } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { isBuiltin } from 'node:module'
+import { createRequire, isBuiltin } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { load } from 'js-yaml'
@@ -98,7 +98,7 @@ export function entryListProblem(rows: unknown, at = ''): string | undefined {
 }
 
 /**
- * Whether a package name is installed anywhere above `base`.
+ * Whether a package is installed above `base` or resolved by the host.
  *
  * Node's own upward `node_modules` walk, stopping at the package directory:
  * the question is whether the package is there at all, which is what a row
@@ -111,7 +111,7 @@ export function entryListProblem(rows: unknown, at = ''): string | undefined {
  * cost more than the lookups they wrap.
  * @param name - the package specifier, possibly carrying a subpath.
  * @param base - the URL to walk up from.
- * @returns true when the package directory is installed above `base`.
+ * @returns true when the package is present or the host resolves its entry without loading it.
  */
 function packageInstalled(name: string, base: string): boolean {
   // A scoped name spends two segments on the package; anything after either
@@ -121,35 +121,25 @@ function packageInstalled(name: string, base: string): boolean {
   for (;;) {
     if (existsSync(join(dir, 'node_modules', pkg, 'package.json'))) return true
     const parent = dirname(dir)
-    if (parent === dir) return false
+    if (parent === dir) break
     dir = parent
+  }
+  try {
+    createRequire(new URL('./package.json', base)).resolve(name)
+    return true
+  } catch {
+    // Missing packages and rejected host resolutions leave the preset broken.
+    return false
   }
 }
 
 /**
  * Whether one classified row names a module that exists, importing nothing.
  *
- * Each kind is checked by what actually answers it. A package name is looked
- * up on disk — the same upward walk Node's own resolver starts with — and a
- * relative or `file:` specifier is statted, because both name one file.
- * Nothing is evaluated either way, so a row is judged without its plugin
- * observing that discovery looked.
- *
- * `import.meta.resolve` is deliberately not the fallback for a name the disk
- * lookup misses. Its `parentURL` argument only takes effect under
- * `--experimental-import-meta-resolve`, which no launch passes, so it would
- * resolve from THIS module rather than from the harness — reporting a
- * dependency visible only to this package as healthy, and a plugin the mount
- * can import as broken. The resolver that does honour an explicit parent is
- * the Loader's internal one, whose `resolveSync` signature differs between
- * Node 22 and 24 (`ModuleLoader.fromInternal` tags the raw object rather than
- * normalising it); reaching into that for a case the walk already covers buys
- * nothing a supported deployment needs, because every plugin a preset names
- * is installed beside the roster.
- *
- * What that gives up: a package resolvable ONLY through a loader hook — an
- * import map, or a tree with no `node_modules` at all — is reported broken.
- * No supported install produces one.
+ * Package names use the disk lookup and the host's parent-aware CommonJS
+ * resolver. Relative and file specifiers are statted beside the preset.
+ * Discovery never executes a plugin. ESM-only host hooks without a matching
+ * CommonJS resolver are not supported by the fallback.
  * @param row - the classified specifier, from {@link classifyRowSpecifier}.
  * @param presetBase - directory URL a preset-relative specifier resolves against.
  * @param harnessBase - base URL a package name resolves against.

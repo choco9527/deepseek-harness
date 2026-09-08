@@ -1,5 +1,6 @@
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import Module from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -245,6 +246,27 @@ describe('composition health', () => {
 })
 
 describe('rows naming a plugin that cannot be resolved', () => {
+  it('accepts a host-resolved package without importing it and rejects it after hook disposal', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-presets-overlay-'))
+    roots.push(root)
+    await mkdir(join(root, 'probe'))
+    await writeFile(join(root, 'probe', COMPOSITION_FILE), '- name: preset-overlay-fixture\n')
+    const target = join(root, 'plugin.mjs')
+    await writeFile(target, 'throw new Error("discovery must not execute plugins")\n')
+    const base = pathToFileURL(`${root}/`).href
+    const runtime = Module as unknown as { _resolveFilename: (name: string, ...args: unknown[]) => string }
+    const original = runtime._resolveFilename
+    const resolver = vi.spyOn(runtime, '_resolveFilename').mockImplementation((name, ...args) => (
+      name === 'preset-overlay-fixture' ? target : original.call(runtime, name, ...args)
+    ))
+    try {
+      expect((await scanRoot({ path: root, trust: 'user' }, base))[0]?.broken).toBeUndefined()
+    } finally {
+      resolver.mockRestore()
+    }
+    expect((await scanRoot({ path: root, trust: 'user' }, base))[0]?.broken).toContain('cannot be resolved')
+  })
+
   /** One directory under a fresh root holding `composition`, scanned. */
   async function scanned(composition: string): Promise<string | undefined> {
     const root = await mkdtemp(join(tmpdir(), 'dsh-presets-resolve-'))
