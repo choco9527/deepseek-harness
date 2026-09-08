@@ -55,7 +55,7 @@ Status: implemented
 
 - hub（trigger/decoration 注册表 + 发送编排）对 slash/command 服务是可选 `ctx.get()` 依赖：无 ui-input-trigger/命令面时输入正常收发，优雅降级。
 - 每个实体会话只有一个 `SessionInputShell`（facade），随会话作用域创建和拆除；无会话时不造 input machine。`ConversationRoot` 自身是 `session-maybe` 常驻外壳，持有 HeroShell、Workspace picker、composer stack 与 chain fallback 外框。它始终拥有同一个 scrollport 与 composer seat；会话出现后，彼此独立的严格会话 header 和 body outlet 只填入这些固定区域。
-- composer bar 是一个无条件渲染的 `session-maybe` slot entry：无会话时同一个 InputBar 以惰性态渲染（machine face 缺席、`disabled` owner prop），`connectWorkspace` 返回 blank 会话后同一实例转为 live——编辑器表面 DOM 在无会话 → blank 切换及其后每次 phase 翻转中都不重建；`ConversationRoot`、Hero 与布局骨架全程保持。
+- composer bar 是一个无条件渲染的 `session-maybe` slot entry：无会话时同一个 InputBar 以惰性态渲染（machine face 缺席、`disabled` owner prop），`connectWorkspace` 返回 blank 会话后同一实例转为 live——编辑器表面 DOM 在无会话 → blank 切换及其后每次 phase 翻转中都不重建；`ConversationRoot`、Hero 与布局骨架全程保持。memoized InputBar 在 renderer 绑定各 child slot 的标准 props 后自行渲染 overlay、left、right 与 dock；`ConversationRoot` 只传标量数据和回调，因此无关 shell render 不会制造新的 ReactNode owner prop 或使 bar 失效。
 - ConversationRoot 的 Hero 判据是 `sessionId === undefined || (composerPhase === 'blank' && (openState === 'open' || summaryBlank === true))`：summary 已证实为空的会话在任何 open state 下都保持 Hero，未经证实的会话则在 loading 期间进入 settling。首次 submit 同步进入 engaging，失败也保留 composer 与错误上下文，不退回 blank Hero；sidebar 的 blank 位只在提示词成功受理后翻 false。
 - 发送统一在 hub defaultSink：乐观清稿后只走 `session.prompt` 且固定 `mode:'queue'`（Web UI 无 steer 入口；host 线缆上的 `mode:'steer'` 不经此 machine）；失败且 live draft 仍为空才回填，用户已经继续输入则不覆盖。不存在 Draft materialize 或 attach 事务。
 - blank Hero 改选 Workspace 时，外壳调用 `connectWorkspace`；目标会话不同时把非空 draft 从当前 shell 搬到目标 shell，再 open 新 id，旧 blank 会话留存但不再 current。
@@ -67,8 +67,8 @@ skill/@subagent 引用不走占位符 + occurrence 身份链——纯文本引�
 
 - PickOutcome 增 `{text}` arm；新 scoped bail 事件 `slash/input-insert-text` `{text, span}`（与另三个同约定：draftRev CAS、返回 true ⟺ 实际改写）；facade.insertText 走 setDraft 拼接，机器零改动。
 - source 可选 `lexicon?(session)` 钩子：同步热快照名录，`undefined` = 数据未热——零装饰、永不触发 fetch（渲染路径保持同步无副作用）；配对的可选 `subscribeLexicon?(session, listener)` 钩子是名录在 warm 之后仍会变化（目录 settle、子代生灭）时的失效通道。controller 把各名录聚合进自己的 `lexicon` 快照 store（每次 source 通知重拉）；scope 出生后才注册的 source 由服务广播给活 controller，补 warm 并并入名录。
-- `decorations.scanTextRefs`：词边界扫描 draft（行首/空白后的 `/name`、`@name`，`x/name` 永不命中）对照名录，命中即成为 Lexical 树中的 `TextRefNode` 实体（claim 装饰对行首 token 席位有优先权——见 [Lexical composer note](2026-08-20-web-composer-lexical-editor.zh.md)）；编辑破坏匹配形状时实体还原为普通文本。
-- 发送即原文（不再 `<skill>` 序列化）；气泡侧 MessageItem 双形状装饰（legacy `<skill>` 标签 + 纯文本 token）。
+- `decorations.scanTextRefs`：词边界扫描 draft（行首/空白后的 `/name`、`@name`，`x/name` 永不命中；`/name` token 还必须止于空白或 draft 末尾——与宿主 skill gesture 同样以空白为界，因此 `/nfs-hg/xxx` 是路径、`/plan。` 是普通文本；ui-primitives 中已发送文本的投影 `projectUserText` 采用同一形状）对照名录，命中即成为 Lexical 树中的 `TextRefNode` 实体（claim 装饰对行首 token 席位有优先权——见 [Lexical composer note](2026-08-20-web-composer-lexical-editor.zh.md)）；编辑破坏匹配形状时实体还原为普通文本。
+- 发送即原文（不再 `<skill>` 序列化）；气泡侧 `projectUserText` 只在同一步骤记录了该名字的 `skill-invocation` 注入时才装饰纯文本 `/name` token——ui-chat 的 `SkillNameProjector` 把该步骤注入的 skill 名挂到直接消息节点上，与 recall 投影挂会话标签的方式相同——因此 `/123` 或随手敲的 `/词` 保持普通文本；指令输入气泡（ui-goal）以同样方式指明其已执行的指令，把 token 渲染为 `command` chip；`@name` token 仍按形状装饰。
 - 装饰响应性：shell 订阅 controller 的 lexicon store，每次名录变化重扫全文档，scope 出生预热后才 settle 的名录会直接点亮已有 draft token，无需菜单交互或无关重渲染。
 
 ### 每会话供数贡献与键盘私面
@@ -105,6 +105,7 @@ skill/@subagent 引用不走占位符 + occurrence 身份链——纯文本引�
 | draft 双持久化 {text, occurrences} | mirror 写剪贴板投影零新概念；chip 跨刷新降级可接受 |
 | 原生 textarea undo 栈 | 受控 + 程序化写入下不可靠；粘贴两段 undo 语义只能自管——两侧都随 textarea 一并退役；undo 现归 Lexical history |
 | InputBar 收 16 员 wiring 回调包 | 消费矩阵实证 11 员 InputBar 独占、1 员死成员；标准件通道让组件自取，键盘面包内私递 |
+| 由 `ConversationRoot` 把 InputBar child slot 渲染为 owner prop | 新 React element 会击穿 bar 的 memo 边界；bar 已收到 `renderSlot`，也拥有这些位置 |
 | 空格裁决也认领即执行型命令 | 误触发防线：空格后整行是普通提示词；不可逆副作用只留显式入口 |
 | 通用 tokenPattern 装饰机制 | 结构化 occurrence 记录取代模式扫描 |
 | 占位 select 常驻工具行 | 具名 slot 在注册前保持为空；占位件与真实现冲突时是两个真源 |

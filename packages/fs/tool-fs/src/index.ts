@@ -67,7 +67,8 @@ export function apply(ctx: Context, config: Config): void {
   // read_image is composition-conditional: without a mounted attachment store
   // the deployment cannot durably commit image bytes, so the tool never
   // registers; the execute body keeps a defensive re-check for direct callers.
-  ctx.inject(['attachments'], (imageCtx) => {
+  // The image child must explicitly consume fs when the provider is isolated.
+  ctx.inject(['attachments', 'fs'], (imageCtx) => {
     applyReadImageTool(imageCtx)
   })
   // One escalation API shared by both mutating tools: advertisement gating,

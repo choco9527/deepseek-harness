@@ -10,7 +10,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Include from '@deepseek-ai/cordis-plugin-include'
+import Group from '@deepseek-ai/cordis-plugin-group'
 import { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
 import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
 import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
@@ -36,6 +40,8 @@ import {
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64')
 /** 3x3 red PNG used to trip a tiny configured pixel limit. */
 const PNG_3X3 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAIAAADZSiLoAAAAEElEQVR4nGP4z8AAQQxYWACPjgj4kWPEuQAAAABJRU5ErkJggg==', 'base64')
+/** 1x1 red GIF (GIF89a). */
+const GIF_1X1 = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
 
 const testToolSignal = new AbortController().signal
 
@@ -91,6 +97,7 @@ afterEach(async () => {
 })
 
 interface SetupOptions {
+  isolatedFs?: boolean
   models?: LlmModelInfo[]
   resolvedModels?: LlmModelInfo[]
   attachments?: boolean
@@ -119,8 +126,39 @@ async function setup(options: SetupOptions = {}) {
       { provider: 'visual', id: 'legacy-model', name: 'Legacy' },
     ], options.resolvedModels))
   }
-  await ctx.plugin(ToolFs)
+  if (options.isolatedFs) {
+    await loadIsolatedFileTools(ctx)
+  } else {
+    await ctx.plugin(ToolFs)
+  }
   return ctx
+}
+
+/** Load the filesystem tool namespace through the same isolated YAML group used by hosts. */
+async function loadIsolatedFileTools(ctx: Context): Promise<void> {
+  const configPath = join(home, 'cordis.yml')
+  await writeFile(configPath, [
+    '- name: cordis:group', '  group: true', '  isolate:', '    fs: true', '  config:',
+    '    - name: "@deepseek-ai/dsh-fs-local"',
+    '      config:', `        cwd: ${JSON.stringify(dir)}`,
+    '    - name: "@deepseek-ai/dsh-tool-fs"', '',
+  ].join('\n'))
+  await ctx.plugin(Loader)
+  ctx.loader.builtins.include = Include
+  ctx.loader.builtins.group = Group
+  const modules = new Map<string, unknown>([
+    ['@deepseek-ai/dsh-fs-local', LocalFileSystem],
+    ['@deepseek-ai/dsh-tool-fs', ToolFs],
+  ])
+  ctx.loader.internal = {
+    version: 'v2',
+    async import(specifier: string) {
+      if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
+      return modules.get(specifier)
+    },
+  } as unknown as NonNullable<typeof ctx.loader.internal>
+  await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
+  await ctx.loader.await()
 }
 
 /** A fake calling agent pinned to one routed provider/model. */
@@ -202,6 +240,27 @@ describe('imageRefFromValue', () => {
 })
 
 describe('read_image happy path', () => {
+  it('reads an image through a Loader-isolated filesystem and removes its tools on disposal', async () => {
+    await writeFile(join(dir, 'red.png'), PNG_1X1)
+    const ctx = await setup({ isolatedFs: true })
+    try {
+      const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
+      expect(result.isError, text(result)).toBe(false)
+      const image = result.content.find(block => block.type === 'image')
+      expect(image?.type).toBe('image')
+      if (image?.type !== 'image') throw new Error('expected an image block')
+      const stored = await ctx.get('attachments')!.readImage(image.attachment)
+      expect(Buffer.from(stored.data)).toEqual(PNG_1X1)
+      const tools = ctx.tools
+      const entry = [...ctx.loader.entries()].find(row => row.options.name === '@deepseek-ai/dsh-tool-fs')
+      expect(entry?.fiber).toBeDefined()
+      await entry!.fiber!.dispose()
+      expect(tools.schemas().some(schema => schema.name === 'read_image')).toBe(false)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('commits the bytes durably and renders the envelope beside an image block', async () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup()
@@ -230,6 +289,37 @@ describe('read_image happy path', () => {
     if (attachments === undefined) throw new Error('expected the attachment service')
     const stored = await attachments.readImage(image.attachment)
     expect(Buffer.from(stored.data)).toEqual(PNG_1X1)
+  })
+
+  it('commits a GIF durably and renders the normalized envelope beside an image block', async () => {
+    await writeFile(join(dir, 'red.gif'), GIF_1X1)
+    const ctx = await setup()
+    const result = await readImage(ctx, { file_path: 'red.gif' }, agentOn('vision-model'))
+
+    expect(result.isError).toBe(false)
+    expect(result.content).toHaveLength(2)
+    const image = result.content[1] as { type: string; attachment: ImageAttachmentRef }
+    expect(image.type).toBe('image')
+    // Normalization re-encodes this transparent 1x1 GIF as WebP: the bytes do
+    // not pass through unchanged, only the source file name survives.
+    expect(image.attachment.mediaType).toBe('image/webp')
+    expect(image.attachment.width).toBe(1)
+    expect(image.attachment.height).toBe(1)
+    expect(image.attachment.bytes).toBe(72)
+    expect(image.attachment.name).toBe('red.gif')
+    expect(image.attachment.attachmentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(text(result)).toBe(formatImageReadOutput(join(dir, 'red.gif'), {
+      attachmentId: image.attachment.attachmentId,
+      mediaType: 'image/webp',
+      bytes: 72,
+      width: 1,
+      height: 1,
+    }))
+
+    const attachments = ctx.get('attachments')
+    if (attachments === undefined) throw new Error('expected the attachment service')
+    const stored = await attachments.readImage(image.attachment)
+    expect(Buffer.from(stored.data).subarray(0, 4).toString()).toBe('RIFF')
   })
 
   it('emits fs/observed for the read image', async () => {
@@ -775,5 +865,40 @@ describe('read keeps its text-only contract', () => {
     expect(txt.isError).toBe(false)
     expect(text(txt)).toContain('1: hello')
     expect(text(txt)).toContain('<type>file</type>')
+  })
+})
+
+describe('image result presentation', () => {
+  /** A canonical committed reference, shaped like a real saveImage outcome. */
+  const REF = {
+    attachmentId: `sha256:${'a'.repeat(64)}`,
+    mediaType: 'image/png' as const,
+    bytes: 24_588,
+    width: 1496,
+    height: 260,
+    name: 'card.png',
+  }
+  const VALUE = { path: '/w/app/shots/card.png', image: REF }
+
+  it('persists the path only, leaving the reference to the result content', async () => {
+    // The settled content already carries the image block with the complete
+    // reference, so copying it into meta would keep two records of one fact and a
+    // post-execute content replacement would strand the stale copy.
+    const ctx = await setup()
+    const meta = ctx.tools.get('read_image')?.output.presentationMeta?.({ file_path: 'shots/card.png' }, VALUE)
+    expect(meta).toEqual({ path: VALUE.path })
+  })
+
+  it('carries the committed reference in the result content, not in meta', async () => {
+    // Proves the single source of truth on the path a live call actually takes.
+    await writeFile(join(dir, 'red.png'), PNG_1X1)
+    const ctx = await setup()
+    const result = await call(ctx, 'read_image', { file_path: 'red.png' }, agentOn('vision-model'))
+    expect(result.isError).toBe(false)
+    expect(result.meta).toEqual({ path: join(dir, 'red.png') })
+    const image = result.content.find(block => block.type === 'image')
+    expect(image?.attachment.width).toBe(1)
+    expect(image?.attachment.height).toBe(1)
+    expect(image?.attachment.attachmentId).toMatch(/^sha256:/u)
   })
 })
