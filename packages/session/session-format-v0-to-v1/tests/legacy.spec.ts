@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
 import {
-  releasedV0SessionFormatCodec,
   sessionFormatV0ToV1,
 } from '../src/index.ts'
+import { restoreV0ToV1 } from '../src/testing/restore.ts'
 
 const header = {
   type: 'session',
@@ -14,10 +14,32 @@ const header = {
 } as const
 
 function migrate(rows: readonly unknown[]) {
-  return sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(header, rows))
+  return restoreV0ToV1(header, rows)
 }
 
 describe('released v0 legacy normalization', () => {
+  it('preserves submitted annotations in both the inbox and message surface', () => {
+    const message = {
+      id: 'annotation-1', role: 'user', content: [{ type: 'text', text: 'selected context' }],
+      source: { kind: 'plugin', plugin: 'context-provider', form: 'annotation', submissionId: 'request-1' },
+    }
+    const rows = [
+      { type: 'agent/inbox/spliced', seq: 0, time: 1, data: { target: 'next-turn', start: 0, inserted: [message] } },
+      { type: 'turn/start', seq: 1, time: 2, data: { turn: 1 } },
+      { type: 'user/message', seq: 2, time: 3, data: message, surfaceOp: 'append' },
+      { type: 'turn/end', seq: 3, time: 4, data: { turn: 1, reason: { kind: 'completed' } } },
+    ]
+    expect(migrate(rows).events).toEqual(rows)
+    for (const source of [
+      { ...message.source, submissionId: '' },
+      { ...message.source, submissionId: 1 },
+      { ...message.source, form: 'instructions' },
+      { kind: 'plugin', plugin: 'context-provider', form: 'annotation' },
+    ]) {
+      expect(() => migrate([{ ...rows[2], seq: 0, data: { ...message, source } }])).toThrow(/submissionId/)
+    }
+  })
+
   it('restores pre-identity user, assistant, and replacement tool-result identities', () => {
     const rows = [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },

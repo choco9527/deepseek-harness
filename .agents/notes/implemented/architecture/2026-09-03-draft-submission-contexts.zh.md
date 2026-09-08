@@ -16,6 +16,8 @@ Session prompt RPC 携带仅文本的 `PromptContext`。`dsh-session-controller`
 
 注释上下文记录 `form: 'annotation'`，并把请求 id 写为 `submissionId`。Chat 通过这个 id 与 `source.rpcId` 相同的 user 或 steering message 关联，隐藏独立 context 行，并在已提交消息上方展示所选文本。
 
+已发布的 v0/v1 迁移在收件箱条目与消息表面中校验并保留批注来源。批注要求非空的 `submissionId`，其他 plugin form 拒绝该字段。丢弃标识会破坏对话关联。既有相邻版本迁移事务仅写入带版本名的后继文件，已提交的前代文件保持不变。
+
 `dsh-add-to-chat` 是首个消费者。它按会话保存选中的助手文本，在 composer 附件区域旁渲染列表，不再注册 input-trigger codec 或 Lexical Chip。
 
 ## 考虑过的替代方案

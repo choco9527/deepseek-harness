@@ -16,6 +16,8 @@ The session prompt RPC carries text-only `PromptContext` entries. `dsh-session-c
 
 An annotation context records `form: 'annotation'` and the request id as `submissionId`. Chat joins those durable context messages to the user or steering message whose `source.rpcId` has that id, hides the standalone context rows, and presents the selected text above the submitted message.
 
+The released v0/v1 migration validates and preserves annotation sources in both inbox entries and surface messages. An annotation requires a non-empty `submissionId`; other plugin forms reject that field. Discarding the identity would break the transcript association. The existing adjacent migration transaction writes only a version-named successor and retains committed predecessors unchanged.
+
 `dsh-add-to-chat` is the first consumer. It keeps selected assistant text in its own per-session list, renders the list next to the composer attachment area, and no longer registers an input-trigger codec or a Lexical chip.
 
 ## Alternatives considered

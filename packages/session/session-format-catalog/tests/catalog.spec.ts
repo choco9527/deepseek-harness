@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { sessionFormatCatalog } from '../src/index.ts'
 
 describe('first-party Session format catalog', () => {
+  it('preserves submitted annotation identity through the complete released migration chain', () => {
+    const source = { kind: 'plugin', plugin: 'context-provider', form: 'annotation', submissionId: 'request-1' }
+    const message = { id: 'context-1', role: 'user', content: [{ type: 'text', text: 'selected context' }], source }
+    const restore = sessionFormatCatalog.createRestore({
+      type: 'session', version: 0, id: 'annotations', createdAt: 1, delegationDepth: 0,
+    }, { recovery: 'strict', validation: 'current' })
+    restore.decodeRow({ type: 'agent/inbox/spliced', seq: 0, time: 1, data: { target: 'next-turn', start: 0, inserted: [message] } })
+    restore.decodeRow({ type: 'turn/start', seq: 1, time: 2, data: { turn: 1 } })
+    restore.decodeRow({ type: 'user/message', seq: 2, time: 3, surfaceOp: 'append', data: message })
+    restore.decodeRow({ type: 'turn/end', seq: 3, time: 4, data: { turn: 1, reason: { kind: 'completed' } } })
+    const result = restore.finish()
+    expect(result.header.version).toBe(2)
+    expect(result.events[2]?.data).toEqual(message)
+  })
+
   it('statically owns the complete adjacent v0 to v2 chain', () => {
     const header = {
       type: 'session',
@@ -27,10 +42,11 @@ describe('first-party Session format catalog', () => {
     })
 
     const v1Header = { ...header, version: 1 }
-    const current = sessionFormatCatalog.decodeArtifact(v1Header, [
-      { type: 'turn/start', seq: 0, time: 2, data: { turn: 1 } },
-    ])
-    expect(sessionFormatCatalog.migrate(current)).toMatchObject({
+    const restore = sessionFormatCatalog.createRestore(v1Header, {
+      recovery: 'strict', validation: 'current',
+    })
+    restore.decodeRow({ type: 'turn/start', seq: 0, time: 2, data: { turn: 1 } })
+    expect(restore.finish()).toMatchObject({
       header: { version: 2, id: 'catalog' },
     })
   })
@@ -39,21 +55,38 @@ describe('first-party Session format catalog', () => {
     const header = {
       type: 'session', version: 2, id: 'current-growth', createdAt: 1, isSeeded: false, delegationDepth: 0,
     }
-    const extended = sessionFormatCatalog.decodeArtifact(header, [{
+    const restore = (rows: readonly unknown[]) => {
+      const current = sessionFormatCatalog.createRestore(header, {
+        recovery: 'strict', validation: 'current',
+      })
+      for (const row of rows) current.decodeRow(row)
+      return current.finish()
+    }
+    const extended = restore([{
       type: 'turn/start', seq: 0, time: 1, data: { turn: 1, postReleaseMember: true },
     }])
-    expect(sessionFormatCatalog.migrate(extended).events).toEqual(extended.events)
+    expect(extended.events).toEqual([{
+      type: 'turn/start', seq: 0, time: 1, data: { turn: 1, postReleaseMember: true },
+    }])
 
-    const unknownRequired = sessionFormatCatalog.decodeArtifact(header, [{
+    expect(() => restore([{
       type: 'ordinary/not-installed', seq: 0, time: 1, data: 'future',
-    }])
-    expect(() => sessionFormatCatalog.migrate(unknownRequired)).toThrow(/unknown event type/)
+    }])).toThrow(/unknown event type/)
 
-    const extension = sessionFormatCatalog.decodeArtifact(header, [{
+    const extension = restore([{
       type: 'ordinary/external', seq: 0, time: 1, data: null, ignorable: true,
     }])
-    expect(sessionFormatCatalog.migrate(extension).events).toEqual([{
+    expect(extension.events).toEqual([{
       type: 'ordinary/external', seq: 0, time: 1, data: null, ignorable: true,
     }])
+  })
+
+  it('validates complete relationships after streaming migration', () => {
+    const stream = sessionFormatCatalog.createRestore({
+      type: 'session', version: 1, id: 'invalid-stream', createdAt: 1, delegationDepth: 0,
+    }, { recovery: 'strict', validation: 'current' })
+    stream.decodeRow({ type: 'step/start', seq: 0, time: 2, data: { turn: 1, step: 1 } })
+
+    expect(() => stream.finish()).toThrow(/open turn/)
   })
 })
