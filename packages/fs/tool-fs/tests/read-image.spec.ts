@@ -6,7 +6,7 @@
  * regression that `read` keeps its text-only contract.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -508,6 +508,15 @@ describe('extension-less paths', () => {
 })
 
 describe('strict image-modality gate', () => {
+  it.each(['https://example.com/image.png', 'http://example.com/image.png?style=hq', ' HTTPS://example.com/image '])('rejects remote image URL %s before filesystem access', async (file_path) => {
+    const ctx = await setup()
+    const resolve = vi.spyOn(ctx.fs, 'resolve')
+    const result = await readImage(ctx, { file_path }, agentOn('vision-model'))
+    expect(result.isError).toBe(true)
+    expect(text(result)).toBe('Error: read_image accepts local file paths, not HTTP(S) URLs; download the image to a local file with an available tool, then pass its local path')
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
   it('accepts an exact visual route even when the advisory model catalog omits it', async () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({

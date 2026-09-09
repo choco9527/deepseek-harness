@@ -71,6 +71,8 @@ With the policy plugin mounted, `write` and `edit` obtain their guard from the `
 
 ### Failures and recovery
 
+`read_image` rejects HTTP(S) URLs before filesystem access with `read_image accepts local file paths, not HTTP(S) URLs; download the image to a local file with an available tool, then pass its local path`. This path error does not mean the model lacks image input.
+
 Failures are normalized as `Error: <message>` with a structured code preserved for callers. Stable messages include `file_path must be a non-empty string`, `limit must be less than or equal to <max>`, `cannot read "<path>": not found`, `cannot read "<path>": not a regular file`, and the image-route refusal `cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`. `FS_NOT_OBSERVED` is normalized to `cannot modify "<path>": file has not been read — read the file, then retry`, independent of whether the policy or provider rejected the operation; `FS_STALE_VERSION` retains the provider's reason and appends `— re-read the file, then retry`. After the reread confirms absence, `edit` reports `FS_NOT_FOUND` instead of repeating a stale remedy, while `write` uses guarded creation.
 
 -----

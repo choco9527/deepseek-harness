@@ -71,6 +71,8 @@ kind: "package-reference"
 
 ### 失败与恢复
 
+`read_image` 在访问文件系统前拒绝 HTTP(S) URL，返回 `read_image accepts local file paths, not HTTP(S) URLs; download the image to a local file with an available tool, then pass its local path`。此路径错误不代表模型不支持图片输入。
+
 失败被规范化为 `Error: <message>`，并为调用方保留结构化错误码。稳定消息包括 `file_path must be a non-empty string`、`limit must be less than or equal to <max>`、`cannot read "<path>": not found`、`cannot read "<path>": not a regular file`，以及图像路由拒绝 `cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`。无论拒绝来自策略还是提供方，`FS_NOT_OBSERVED` 都规范化为 `cannot modify "<path>": file has not been read — read the file, then retry`；`FS_STALE_VERSION` 保留提供方原因并追加 `— re-read the file, then retry`。该次重新读取确认缺失后，`edit` 报告 `FS_NOT_FOUND` 而不会重复陈旧恢复指令，`write` 则使用防护创建。
 
 -----

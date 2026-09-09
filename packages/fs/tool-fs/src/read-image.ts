@@ -240,6 +240,9 @@ export function applyReadImageTool(ctx: Context): void {
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       if (args.file_path.trim().length === 0) throw new Error('file_path must be a non-empty string')
+      if (/^https?:\/\//i.test(args.file_path.trim())) {
+        throw new Error('read_image accepts local file paths, not HTTP(S) URLs; download the image to a local file with an available tool, then pass its local path')
+      }
 
       // Every pre-read gate runs before any filesystem I/O so a refusal never
       // leaks partial reads or attachment writes. An extension-less path
