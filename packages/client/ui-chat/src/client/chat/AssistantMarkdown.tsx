@@ -132,7 +132,11 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     }
   }
   return (
-    <div className={css.root} data-streaming={streaming || undefined}>
+    // BBA-local: a semantic role marker on the assistant body. Client plugins
+    // that act on a selection (dsh-add-to-chat) need to tell an assistant
+    // reply from any other text without matching CSS class names, which are
+    // build-generated and not a contract.
+    <div className={css.root} data-dsh-message-role="assistant" data-streaming={streaming || undefined}>
       <div className={css.body}>
         {rendered}
         {interrupted && <span className={css.stopped}>{t('message.stopped')}</span>}

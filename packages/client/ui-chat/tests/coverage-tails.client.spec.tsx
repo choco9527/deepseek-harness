@@ -29,6 +29,11 @@ describe('tails', () => {
     expect(view.getByText('思考')).toBeTruthy()
     expect(view.getByText('thinking hard')).toBeTruthy()
     expect(view.getByText(/未知内容块/)).toBeTruthy()
+    // The marker rides the assistant body itself, not an ancestor: a client
+    // plugin resolves it by closest() from a selection node.
+    const marked = view.container.querySelector('[data-dsh-message-role="assistant"]')
+    expect(marked).not.toBeNull()
+    expect(marked?.textContent).toContain('thinking hard')
     const stopped = render(
       <AssistantMarkdown
         t={t}

@@ -431,6 +431,12 @@ export function SessionNodeItem({
       role="treeitem"
       aria-selected={selected}
       onClick={() => { onOpen(node.id) }}
+      // BBA-local: double-click opens the same rename dialog as the row menu
+      // action. A blank New Session row is excluded for the same reason its
+      // menu verbs are: there is no content to rename yet.
+      onDoubleClick={() => {
+        if (!row.blank) onRename(node.id, row.title)
+      }}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
         ? undefined
@@ -491,6 +497,11 @@ export function SessionNodeItem({
                 className={css.iconButton}
                 aria-label={t('actions.session.aria', { name: title })}
                 onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
+                // BBA-local: a fast double tap on the menu button would
+                // otherwise bubble to the row and open the rename dialog on
+                // top of the menu. Stopping click alone does not cover it:
+                // dblclick is a separate event with its own propagation.
+                onDoubleClick={(e) => { e.stopPropagation() }}
               >
                 <IconEllipsisOutline16 />
               </button>
