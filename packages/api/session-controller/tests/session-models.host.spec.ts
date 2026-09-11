@@ -279,41 +279,6 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('injects plugin-owned prompt context before the admitted user prompt', async () => {
-    const { ctx, agent, sessionId } = await harness()
-    const inject = vi.fn()
-    const followup = vi.fn()
-    Object.assign(agent, { inject, followup })
-    const remote = createSessionTestRemote(ctx, {
-      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
-      cwd: '/tmp',
-    })
-
-    const result = await remote.prompt(promptRequest({
-      sessionId,
-      mode: 'queue' as const,
-      content: [{ type: 'text' as const, text: '请继续' }],
-      contexts: [{ plugin: 'dsh-add-to-chat', text: '所选文本：\n参考这一段', form: 'annotation' }],
-    }))
-
-    expect(result.ok).toBe(true)
-    expect(inject.mock.invocationCallOrder[0]).toBeLessThan(followup.mock.invocationCallOrder[0] ?? Infinity)
-    expect(inject).toHaveBeenCalledWith(expect.objectContaining({
-      source: {
-        kind: 'plugin',
-        plugin: 'dsh-add-to-chat',
-        form: 'annotation',
-        submissionId: expect.any(String) as string,
-      },
-      content: [{ type: 'text', text: '所选文本：\n参考这一段' }],
-    }))
-    expect(followup).toHaveBeenCalledWith(expect.objectContaining({
-      source: expect.objectContaining({ kind: 'user' }) as { kind: 'user' },
-      content: [{ type: 'text', text: '请继续' }],
-    }))
-    await ctx.fiber.dispose()
-  })
-
   it('allows a text-only selection while durable or pending images remain available for later models', async () => {
     const { ctx, agent, sessionId } = await harness()
     registerTextOnly(ctx)

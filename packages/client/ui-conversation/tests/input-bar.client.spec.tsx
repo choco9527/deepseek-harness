@@ -52,7 +52,6 @@ function snapshotOf(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
 }
 
 interface BenchOptions {
-  showCommandLauncher?: boolean
   planEntry?: React.ReactNode
   /** The `plan` projection value the standard-kit useProjection serves. */
   plan?: { active: boolean; pending: boolean }
@@ -201,7 +200,6 @@ function bench(over?: BenchOptions) {
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(menuLauncher),
-    usePresentation: selector => selector({ status: 'ready', value: { busyEnter: 'queue', showCommandLauncher: over?.showCommandLauncher ?? true }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' }),
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
     // Mirrors the real lookup chain (conversation namespace, then common).
@@ -1494,12 +1492,6 @@ describe('strips and variants', () => {
 })
 
 describe('command launcher chrome and control seats', () => {
-  it('hides only the command launcher when the profile disables it', () => {
-    const { view, slotCalls } = bench({ showCommandLauncher: false })
-    expect(view.queryByLabelText('指令')).toBeNull()
-    expect(view.getByRole('textbox')).toBeTruthy()
-    expect(slotCalls.some(call => call.key === 'conversation.input.model')).toBe(true)
-  })
   it('renders the command launcher; the Access chip is absent without the permissions projection; the control seats render EMPTY without entries', () => {
     const { view, slotCalls } = bench()
     expect(view.getByLabelText('指令')).toBeTruthy()

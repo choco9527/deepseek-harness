@@ -483,36 +483,6 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('double-clicking a populated session row opens rename, except from the actions button or blank row', () => {
-    const onOpen = vi.fn()
-    const onRename = vi.fn()
-    const node: SessionNode = {
-      id: sid('s-double-click'), title: 'Double click', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
-    }
-    const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
-      onRename={onRename} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
-
-    const row = screen.getByRole('treeitem')
-    fireEvent.click(row)
-    fireEvent.click(row)
-    fireEvent.doubleClick(row)
-    expect(onOpen).toHaveBeenCalledTimes(2)
-    expect(onRename).toHaveBeenCalledWith(node.id, 'Double click')
-
-    fireEvent.doubleClick(screen.getByLabelText('会话“Double click”的操作'))
-    expect(onRename).toHaveBeenCalledOnce()
-
-    const blank: SessionNode = {
-      id: sid('s-double-click-blank'), title: 'New Session', blank: true, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
-    }
-    view.rerender(<SessionNodeItem node={blank} currentId={undefined} now={0} onOpen={onOpen}
-      onRename={onRename} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
-    fireEvent.doubleClick(screen.getByRole('treeitem'))
-    expect(onRename).toHaveBeenCalledOnce()
-  })
-
 
   it('shows the hover card after the dwell and suppresses it while the row menu is open', () => {
     vi.useFakeTimers()

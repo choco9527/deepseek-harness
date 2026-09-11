@@ -21,7 +21,6 @@ import type {
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
-import { DraftContextRegistry, type CapturedDraftContexts } from './draft-contexts.ts'
 
 /** Structural command face for per-session popup resolution. */
 interface CommandFace {
@@ -42,7 +41,6 @@ interface ConversationAttachmentFace {
     attachmentIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal?: AbortSignal,
-    contexts?: readonly import('@deepseek-ai/dsh-api-session-controller/types').PromptContext[],
   ): Promise<SubmitOutcome>
   serializeDraftAttachments(attachmentIds: readonly DraftAttachmentId[]): Promise<DraftAttachmentSerializationResult>
   releaseDraftAttachment(id: DraftAttachmentId): void
@@ -51,8 +49,6 @@ interface ConversationAttachmentFace {
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
   private readonly shells = new Map<SessionId, SessionInputShell>()
-  /** Plugin-owned context captured only when the resident composer submits. */
-  readonly draftContexts = new DraftContextRegistry()
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -92,9 +88,7 @@ export class InputHub implements SessionInputResolver {
       inputTriggers: () => this.controller(actx),
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
-      defaultSink: (text, attachmentIds, mode, signal, contexts) => this.sink(session, text, attachmentIds, mode, signal, contexts),
-      hasDraftContexts: () => this.draftContexts.has(id),
-      draftContexts: () => this.draftContexts.take(id),
+      defaultSink: (text, attachmentIds, mode, signal) => this.sink(session, text, attachmentIds, mode, signal),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandAttachments: {
         serialize: async (ids) => {
@@ -187,12 +181,9 @@ export class InputHub implements SessionInputResolver {
     attachmentIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
-    contexts: CapturedDraftContexts | undefined,
   ): Promise<SubmitOutcome> {
-    if (text === '' && attachmentIds.length === 0 && (contexts === undefined || contexts.contexts.length === 0)) {
-      return Promise.resolve({ kind: 'success' })
-    }
-    return this.conversation().sendSession(session, text, attachmentIds, mode, signal, contexts?.contexts)
+    if (text === '' && attachmentIds.length === 0) return Promise.resolve({ kind: 'success' })
+    return this.conversation().sendSession(session, text, attachmentIds, mode, signal)
   }
 
   /**

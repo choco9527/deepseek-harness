@@ -125,8 +125,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
   const t = ctx.locale.bind(NS)
   const conversationStore = createConversationStore()
-  const conversationSettings = ctx.settingsScope.bind<ConversationSettings>({ namespace: CONVERSATION_SETTINGS_NAMESPACE })
-  const submissionPolicy = new ComposerSubmissionPolicy(conversationSettings)
+  const submissionPolicy = new ComposerSubmissionPolicy(
+    ctx.settingsScope.bind<ConversationSettings>({ namespace: CONVERSATION_SETTINGS_NAMESPACE }),
+  )
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -319,7 +320,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
             notices: ABSENT_NOTICES,
-            presentation: conversationSettings,
             lexicon: ABSENT_LEXICON,
             menuLauncher: ABSENT_MENU_LAUNCHER,
           },
@@ -378,7 +378,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           busyEnter: submissionPolicy.busyEnter,
           fileUploads: conversation.fileUploads,
           notices: shell.notices,
-          presentation: conversationSettings,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
         },
@@ -401,7 +400,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   ctx.plugin(ConversationController, {
     input: inputHub,
     blocks: composerBlocks,
-    draftContexts: inputHub.draftContexts,
     maxConcurrentFileUploads,
   })
   ctx.plugin(todoDockEntry)

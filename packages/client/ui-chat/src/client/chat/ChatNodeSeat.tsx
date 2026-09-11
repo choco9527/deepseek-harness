@@ -14,7 +14,6 @@ interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly useChatNodeProcess: ChatViewSlotProps['useChatNodeProcess']
   readonly historyIncomplete: boolean
   readonly compactTranscript: boolean
-  readonly minimalTranscript: boolean
   readonly useStore: ChatViewSlotProps['useStore']
   readonly actions: ChatViewSlotProps['actions']
   readonly renderSlot: ChatViewSlotProps['renderSlot']
@@ -35,13 +34,9 @@ function turnOf(node: ChatNode | undefined): number | undefined {
   return location?.kind === 'turn' || location?.kind === 'step' ? location.turn.turn : undefined
 }
 
-function assistantHasVisibleContent(node: ChatNode<'assistant-step'>): boolean {
-  return node.data.blocks.some(block => block.kind !== 'reasoning' && block.kind !== 'tool-call')
-}
-
 /** Subscribe, apply Turn-process visibility, and dispatch one stable Context key. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, useChatNode, useChatNodeProcess, historyIncomplete, compactTranscript, minimalTranscript,
+  nodeKey, useChatNode, useChatNodeProcess, historyIncomplete, compactTranscript,
   cwd, openFile, inspectCall, forkAt,
   loadImage, renderMessageImages, fileMentions, useStore, actions, renderSlot, t,
 }: ChatNodeSeatProps) {
@@ -54,67 +49,45 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     ? undefined
     : storedTurnProcessEntry(state, processSpec.turn))
   const processEntry = processSpec !== undefined
+    && processSpec.answerStep !== null
     && storedEntry?.answerStep === processSpec.answerStep
     ? storedEntry
     : undefined
   const processOpen = processEntry !== undefined
   const setOpen = useCallback((open: boolean) => {
-    if (processSpec !== undefined) {
+    if (processSpec !== undefined && processSpec.answerStep !== null) {
       actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep, open)
     }
   }, [actions, processSpec])
-  const sameTurn = routedNode !== undefined && processSpec !== undefined
-    && processPresentation?.turn === processSpec.turn
-  const compactProcessWindowReady = processSpec !== undefined
+  const processWindowReady = processSpec !== undefined
+    && processPresentation !== undefined
     && compactTranscript
     && processSpec.answerAnchorSeq !== null
-    && processPresentation?.turnClosed === true
+    && processPresentation.turn === processSpec.turn
+    && processPresentation.turnClosed
     && !historyIncomplete
-  const minimalProcessWindowReady = processSpec !== undefined
-    && minimalTranscript
-    && !historyIncomplete
-  const processWindowReady = compactProcessWindowReady || minimalProcessWindowReady
-  const inProcessRange = sameTurn
-    && routedNode.anchorSeq >= processSpec.processStartSeq
-    && (minimalTranscript
-      ? processSpec.answerAnchorSeq === null || routedNode.anchorSeq <= processSpec.answerAnchorSeq
-      : processSpec.answerAnchorSeq !== null && routedNode.anchorSeq < processSpec.answerAnchorSeq)
-  const minimalAssistantOnlyReasoning = routedNode?.kind === 'assistant-step'
-    && !assistantHasVisibleContent(routedNode)
-  const processMember = sameTurn
+  const processMember = routedNode !== undefined
     && processWindowReady
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
-    && inProcessRange
-    && (!minimalTranscript || routedNode.kind !== 'assistant-step' || minimalAssistantOnlyReasoning)
-  const processAnswer = sameTurn
-    && compactProcessWindowReady
+    && routedNode.anchorSeq >= processSpec.processStartSeq
+    && routedNode.anchorSeq < processSpec.answerAnchorSeq
+  const processAnswer = routedNode !== undefined
+    && processWindowReady
     && routedNode.kind === 'assistant-step'
     && routedNode.data.step === processSpec.answerStep
   const ownsDisclosure = routedNode?.kind === 'turn-process' || processAnswer
-  const compactFoldable = compactProcessWindowReady
+  const foldable = processWindowReady
     && (processMember || (ownsDisclosure
       && (processPresentation.hasExternalProcess || processSpec.inlineReasoning)))
-  const minimalAssistantProcess = minimalProcessWindowReady
-    && inProcessRange
-    && routedNode.kind === 'assistant-step'
-    && processPresentation.hasMinimalProcess
-  const minimalFoldable = minimalProcessWindowReady
-    && (processMember || (routedNode?.kind === 'turn-process'
-      && (processPresentation?.hasMinimalProcess ?? false)) || minimalAssistantProcess)
-  const foldable = compactFoldable || minimalFoldable
   const turnProcess = useMemo(() => processSpec === undefined
     ? undefined
     : {
       spec: processSpec,
       foldable,
       open: processOpen,
-      hideReasoning: minimalTranscript
-        ? inProcessRange && foldable && !processOpen
-        : processAnswer && processSpec.inlineReasoning && foldable && !processOpen,
       setOpen,
     }, [
-    foldable, inProcessRange, minimalAssistantProcess, minimalTranscript, processAnswer,
-    processOpen, processSpec, setOpen,
+    foldable, processOpen, processSpec, setOpen,
   ])
   const controllerInactive = routedNode?.kind === 'turn-process'
     && !foldable

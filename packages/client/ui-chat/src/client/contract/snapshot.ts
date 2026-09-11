@@ -76,7 +76,6 @@ export interface ChatTurnProcessPresentation {
   readonly spec: TurnProcessSpec
   readonly turnClosed: boolean
   readonly hasExternalProcess: boolean
-  readonly hasMinimalProcess: boolean
   readonly compactAnswer: boolean
 }
 

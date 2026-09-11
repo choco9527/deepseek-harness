@@ -21,9 +21,9 @@ describe('ui-chat Host settings', () => {
     await fiber.await()
     const ns = CHAT_SETTINGS_NAMESPACE
 
-    expect(ctx.settings.get(ns)).toEqual({ transcriptView: DEFAULT_TRANSCRIPT_VIEW_MODE, showComposerStats: true })
+    expect(ctx.settings.get(ns)).toEqual({ transcriptView: DEFAULT_TRANSCRIPT_VIEW_MODE })
     await ctx.settings.update(ns, { transcriptView: 'normal' })
-    expect(ctx.settings.get(ns)).toEqual({ transcriptView: 'normal', showComposerStats: true })
+    expect(ctx.settings.get(ns)).toEqual({ transcriptView: 'normal' })
     await expect(ctx.settings.update(ns, { transcriptView: 'dense' })).rejects.toThrow()
 
     await fiber.dispose()
@@ -33,14 +33,5 @@ describe('ui-chat Host settings', () => {
   it('loads without a settings provider', async () => {
     const ctx = new Context()
     await expect(ctx.plugin({ apply }).await()).resolves.toBeDefined()
-  })
-
-  it('uses the profile default until a user preference exists', async () => {
-    const ctx = new Context()
-    await ctx.plugin(MemorySettings).await()
-    const fiber = ctx.plugin({ apply }, { defaultTranscriptView: 'minimal' })
-    await fiber.await()
-
-    expect(ctx.settings.get(CHAT_SETTINGS_NAMESPACE)).toEqual({ transcriptView: 'minimal', showComposerStats: true })
   })
 })

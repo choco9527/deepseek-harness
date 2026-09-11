@@ -100,8 +100,6 @@ export interface TurnProcessOwnerProps {
   readonly spec: TurnProcessSpec
   readonly foldable: boolean
   readonly open: boolean
-  /** Whether reasoning blocks in this Seat remain collapsed. */
-  readonly hideReasoning: boolean
   setOpen(open: boolean): void
 }
 

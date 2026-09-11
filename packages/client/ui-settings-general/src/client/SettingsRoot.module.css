@@ -56,30 +56,15 @@
   white-space: nowrap;
 }
 
-/* Settings replaces the application content while open. */
+/* Full-viewport layer (figma Mask 501:29946 #000@24%): mask tokens match the
+   Modal primitive (--dsw-alias-bg-mask-1 + --dsw-mask-blur). */
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-/* One stable viewport for every section; only the content column scrolls. */
-.page {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: var(--dsw-alias-bg-layer-2);
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-}
-
-.modalOverlay {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
 }
 
 .mask {
@@ -89,103 +74,47 @@
   backdrop-filter: var(--dsw-mask-blur);
 }
 
-.modal {
+/* Panel (figma Settings 501:29947): r24, white; the figma lv3 effects are
+   superseded by the shared elevation treatment; figma's 1080x700 is shrunk to 800 wide.
+   One height for every section, taken from the viewport rather than the
+   content: sections differ by hundreds of pixels (a settings list against the
+   composition editor), and a content-sized panel would resize under the
+   pointer on every nav click. Whatever does not fit scrolls in `.options`. */
+.panel {
   position: relative;
-  width: min(800px, calc(100% - 48px));
-  height: min(800px, calc(100% - 48px));
+  z-index: 1;
+  display: flex;
+  width: 800px;
+  height: min(800px, calc(100vh - 48px));
+  max-width: calc(100vw - 48px);
   border-radius: 32px;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2);
   box-shadow: var(--dsw-elevation-prominent);
+  /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens.
+     Declared on the panel rather than the scrolling `.options` child so the
+     elevation choice sits with the surface; the custom properties inherit
+     down to whichever descendant scrolls (see ui-theme
+     styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-.close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin-left: 12px;
-  border: none;
-  border-radius: 50%;
-  color: var(--dsw-alias-label-primary);
-  background: transparent;
-  cursor: pointer;
-}
-
-.close:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.hiddenLabel {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.modal .nav {
-  gap: 18px;
-  width: 188px;
-  padding: 22px 12px 0;
-  border-right: none;
-  background: transparent;
-}
-
-.modal .header {
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 54px;
-  padding: 20px 14px 8px 10px;
-}
-
-.modal .options {
-  padding: 0 24px 24px;
-}
-
-/* Stable navigation column with a page-level return action. */
+/* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
+   gap 18, no own fill — the panel white shows through. */
 .nav {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  width: 224px;
-  padding: 18px 12px 20px;
+  gap: 18px;
+  width: 188px;
+  padding: 22px 12px 0;
   box-sizing: border-box;
-  border-right: 1px solid var(--dsw-alias-border-l1);
-  background: var(--dsw-alias-bg-layer-1);
 }
 
-.back {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  box-sizing: border-box;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--dsw-alias-label-primary);
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 500;
-  text-align: left;
-}
-
-.back:hover,
-.back:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
+/* Title row (figma 501:29959): 16/500 lh24, 12px side padding. */
 .navTitle {
-  padding: 4px 12px 0;
+  padding: 0 12px;
   font-size: 16px;
   line-height: 24px;
   font-weight: 500;
@@ -240,7 +169,7 @@
   text-overflow: ellipsis;
 }
 
-/* Content column expands to all width left by navigation. */
+/* Content column (figma Content 501:29980): header + options. */
 .content {
   flex: 1;
   min-width: 0;
@@ -248,13 +177,15 @@
   flex-direction: column;
 }
 
+/* Header (figma .Header 501:29981): h54, pad (10,20,14,8), close right. */
 .header {
   flex: none;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: 64px;
-  padding: 16px 32px 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  height: 54px;
+  padding: 20px 14px 8px 10px;
   box-sizing: border-box;
 }
 
@@ -267,23 +198,39 @@
   margin-left: auto;
 }
 
+/* Close button (figma .Icon_container 501:29982): 28x28, r28, 14px glyph. */
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+}
+
+.close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
 .options {
   flex: 1;
   min-height: 0;
-  padding: 0 32px 32px;
+  padding: 0 24px 24px;
   overflow-y: auto;
 }
 
-@media (max-width: 720px) {
-  .nav {
-    width: 184px;
-  }
-
-  .header {
-    padding-inline: 20px;
-  }
-
-  .options {
-    padding: 0 20px 24px;
-  }
+/* Visually-hidden text seat (close button accessible name from slot content). */
+.hiddenLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

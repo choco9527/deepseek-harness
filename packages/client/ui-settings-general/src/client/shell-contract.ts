@@ -7,8 +7,6 @@
  * The settings SLOT types (what registrants contribute) stay in ui-settings.
  */
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { Config } from '../index.ts'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
@@ -40,8 +38,6 @@ export type SettingsRootInjected = {
   /** Request a fresh logical generation and physical WebSocket immediately. */
   reconnect: () => void
   hooks: {
-    /** Host-backed shell presentation. */
-    presentation: SettingsScope<Config>
     /** Connection-owned state for the current Host connection. */
     connectionState: HostObservable<ConnectionState | undefined>
     /** settings.section ledger projected into ordered nav rows. */
@@ -54,7 +50,7 @@ export type SettingsRootInjected = {
 /**
  * Full component props of the settings shell root: the sidebar owner share
  * (wide/rail state) plus the declared render shares and the injected face
- * (hooks compartment bound to useSections). No store is registered — page
+ * (hooks compartment bound to useSections). No store is registered — modal
  * open state and active section id are component-local viewing state.
  */
 export type SettingsRootComponentProps =

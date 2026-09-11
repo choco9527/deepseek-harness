@@ -268,7 +268,6 @@ function mount(
           toggleCommandMenu={vi.fn()}
           useBusyEnter={bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue'))}
           useNotices={bindSnapshotSelector(wiring.notices)}
-          usePresentation={select => select({ status: 'ready', value: { busyEnter: 'queue', showCommandLauncher: true }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' })}
           useLexicon={bindSnapshotSelector(wiring.lexicon)}
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
           stop={stop}

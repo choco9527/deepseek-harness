@@ -1545,37 +1545,6 @@ describe('ChatView', () => {
     expect(processRow.getAttribute('hidden')).toBe('until-found')
   })
 
-  it('keeps reply text visible while Minimal folds live process details', () => {
-    const process = reasoningAssistant(2, 'hidden reasoning', 1, 1)
-    const h = makeHarness({
-      nodes: [user(1, 'question'), process, toolResult(3, 'a')],
-      partial: {
-        turn: 1,
-        step: 2,
-        blocks: [
-          { kind: 'reasoning', text: 'current hidden reasoning' },
-          { kind: 'text', text: 'visible reply' },
-        ],
-      },
-      running: true,
-    })
-    h.setTranscriptView('minimal')
-    const view = render(<h.ChatView {...h.props} />)
-    const toggle = turnProcessControl(view.container)!
-    const toolRow = view.getByText('bash:a').closest('[data-chat-flow-kind="tool-call"]') as HTMLElement
-    const reasoning = view.getByText('current hidden reasoning')
-      .closest<HTMLElement>('[data-turn-process-inline]')!
-
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(view.getByText('visible reply')).toBeTruthy()
-    expect(toolRow.getAttribute('hidden')).toBe('until-found')
-    expect(reasoning.getAttribute('hidden')).toBe('until-found')
-
-    fireEvent.click(toggle)
-    expect(toolRow.getAttribute('hidden')).toBeNull()
-    expect(reasoning.getAttribute('hidden')).toBeNull()
-  })
-
   it('switches completed Turns between the persisted Normal and Compact modes', () => {
     const process = assistant(2, 'inspect', 1, 1)
     const h = makeHarness({

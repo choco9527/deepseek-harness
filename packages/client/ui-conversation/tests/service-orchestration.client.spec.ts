@@ -41,7 +41,6 @@ async function bench(maxConcurrentFileUploads = 2) {
   const fiber = runtime.ctx.plugin(ConversationController, {
     input: hub,
     blocks: new ComposerBlockRegistry(),
-    draftContexts: hub.draftContexts,
     maxConcurrentFileUploads,
   })
   await fiber.await()
@@ -373,10 +372,7 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
-  it.each([
-    undefined,
-    [{ plugin: 'annotation-source', form: 'annotation' as const, text: 'selected reply' }],
-  ])('keeps the accepted file draft until its rpcId appears in the Host queue with context %j', async (contexts) => {
+  it('keeps the accepted file draft until its rpcId appears in the Host queue', async () => {
     const b = await bench()
     const session = b.runtime.sessions.binding('s1')!.session
     let retire: ((retirement: unknown) => void) | undefined
@@ -400,13 +396,13 @@ describe('ConversationController', () => {
       expect(b.root.fileUploads.getSnapshot()[attachment.id]?.status).toBe('ready')
     })
 
-    const sending = b.root.sendSession(session, 'read', [attachment.id], 'queue', undefined, contexts)
+    const sending = b.root.sendSession(session, 'read', [attachment.id], 'queue')
     await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledOnce() })
 
     expect(b.prompt).toHaveBeenCalledWith([
       { type: 'file', receiptId: 'send-receipt' },
       { type: 'text', text: 'read' },
-    ], 'queue', undefined, expect.any(String), contexts)
+    ], 'queue', undefined, expect.any(String))
     expect(b.root.resolveDraftAttachments([attachment.id])).toHaveLength(1)
     expect(b.prompt.mock.calls[0]?.[3]).toBe('file-rpc-id')
     retire?.({
@@ -455,11 +451,9 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
     // No Client Sessions service at all: a bare context lacks the assembled controller.
     const bare = new Context()
-    const bareInput = new InputHub(bare, makeTranslate(zh, {}))
     await bare.plugin(ConversationController, {
-      input: bareInput,
+      input: new InputHub(bare, makeTranslate(zh, {})),
       blocks: new ComposerBlockRegistry(),
-      draftContexts: bareInput.draftContexts,
       maxConcurrentFileUploads: 2,
     }).await()
     const orphan = bare.get('conversation') as ConversationController
@@ -514,7 +508,6 @@ describe('sendSession submission echo', () => {
         'queue',
         undefined,
         'req-echo',
-        undefined,
       )
       // The draft stays registered until the echo's observed retirement.
       expect(b.root.resolveDraftAttachments([attachment!.id])).toHaveLength(1)
@@ -712,7 +705,7 @@ describe('sendSession submission echo', () => {
     try {
       const session = b.runtime.sessions.binding('s1')!.session
       await expect(b.root.sendSession(session, '纯文本', [], 'queue')).resolves.toEqual({ kind: 'success' })
-      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '纯文本' }], 'queue', undefined, 'req-echo', undefined)
+      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '纯文本' }], 'queue', undefined, 'req-echo')
     } finally {
       vi.unstubAllGlobals()
       b.restore()
@@ -728,7 +721,7 @@ describe('sendSession submission echo', () => {
       const sending = b.root.sendSession(session, '后台标签', [], 'queue')
       expect(b.prompt).not.toHaveBeenCalled()
       await expect(sending).resolves.toEqual({ kind: 'success' })
-      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '后台标签' }], 'queue', undefined, 'req-echo', undefined)
+      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '后台标签' }], 'queue', undefined, 'req-echo')
     } finally {
       vi.unstubAllGlobals()
       b.restore()

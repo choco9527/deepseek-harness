@@ -29,7 +29,6 @@ describe('tails', () => {
     expect(view.getByText('思考')).toBeTruthy()
     expect(view.getByText('thinking hard')).toBeTruthy()
     expect(view.getByText(/未知内容块/)).toBeTruthy()
-    expect(view.container.querySelector('[data-dsh-message-role="assistant"]')).not.toBeNull()
     const stopped = render(
       <AssistantMarkdown
         t={t}

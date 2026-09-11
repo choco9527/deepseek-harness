@@ -131,7 +131,7 @@ describe('ui-settings-general apply', () => {
     expect(b.locale.bind('settings')('connection.connecting')).toBe('自动重连中')
     expect(b.locale.bind('settings')('connection.connected')).toBe('连接成功')
     b.locale.setLocale('en')
-    expect(b.locale.bind('settings')('close')).toBe('Back to app')
+    expect(b.locale.bind('settings')('close')).toBe('Close')
     expect(b.locale.bind('settings')('connection.reconnect')).toBe('Disconnected, reconnect now')
     expect(b.locale.bind('settings')('connection.connecting')).toBe('Reconnecting')
     b.locale.setLocale('zh')

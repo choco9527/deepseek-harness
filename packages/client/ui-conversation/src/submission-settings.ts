@@ -19,14 +19,11 @@ export const DEFAULT_BUSY_ENTER_BEHAVIOR: BusyEnterBehavior = 'queue'
 
 /** Durable conversation section shared by the Host schema and the browser scope. */
 export interface ConversationSettings {
-  /** Whether the composer displays its command-menu launcher. */
-  showCommandLauncher?: boolean
   /** Delivery mode for plain Enter while the addressed agent is busy. */
   busyEnter: BusyEnterBehavior
 }
 
 /** Durable conversation schema; also the wire envelope the browser scope validates against. */
 export const ConversationSettingsSchema: z<ConversationSettings> = z.object({
-  showCommandLauncher: z.boolean().default(true),
   [BUSY_ENTER_FIELD]: z.union([...BUSY_ENTER_BEHAVIORS]).default(DEFAULT_BUSY_ENTER_BEHAVIOR),
 })

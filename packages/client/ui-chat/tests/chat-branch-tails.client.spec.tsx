@@ -40,12 +40,11 @@ interface MessageItemProps {
   readonly node: ConversationNode
   readonly t: ChatNodeViewProps['t']
   readonly referenceLabels?: readonly string[]
-  readonly annotations?: readonly { readonly text: string }[]
   readonly skillNames?: readonly string[]
 }
 
 /** Legacy-node fixture adapter for the independently registered renderers. */
-function MessageItem({ node, t: translate, referenceLabels, annotations, skillNames }: MessageItemProps) {
+function MessageItem({ node, t: translate, referenceLabels, skillNames }: MessageItemProps) {
   const kind = node.kind === 'assistant' ? 'assistant-step' : node.kind
   const viewNode: ChatConversationViewNode = {
     key: `fixture:${node.kind}:${node.seq}`,
@@ -57,11 +56,10 @@ function MessageItem({ node, t: translate, referenceLabels, annotations, skillNa
     visibility: 'visible',
     data: node.kind === 'model-retry'
       ? { attempts: [node], current: node }
-      : (node.kind === 'user' || node.kind === 'steering')
+      : (node.kind === 'user' || node.kind === 'steering') && (referenceLabels !== undefined || skillNames !== undefined)
         ? {
           ...node,
           ...(referenceLabels === undefined ? {} : { referenceLabels }),
-          ...(annotations === undefined ? {} : { annotations }),
           ...(skillNames === undefined ? {} : { skillNames }),
         }
         : node,
@@ -85,31 +83,6 @@ function MessageItem({ node, t: translate, referenceLabels, annotations, skillNa
 }
 
 describe('MessageItem arms', () => {
-  it('shows submitted annotations above the user bubble on hover', () => {
-    const view = render(
-      <MessageItem
-        t={t}
-        annotations={[{ text: '引用助手回复：\n三项内置插件' }]}
-        node={{
-          kind: 'user',
-          seq: 1,
-          time: 1_000,
-          content: [{ type: 'text', text: '这个呢？' }] as never,
-          source: null,
-        }}
-      />,
-    )
-
-    const trigger = view.getByRole('button', { name: '查看 1 条注释' })
-    expect(view.queryByText('所选文本：')).toBeNull()
-    fireEvent.mouseEnter(trigger)
-    expect(view.getByText('所选文本：')).toBeTruthy()
-    expect(view.container.querySelector('[data-message-annotation-text]')?.textContent)
-      .toBe('引用助手回复：\n三项内置插件')
-    fireEvent.mouseLeave(trigger)
-    expect(view.queryByText('所选文本：')).toBeNull()
-  })
-
   it('renders an adjacent session mention as a chip even without trailing whitespace', () => {
     const view = render(
       <MessageItem

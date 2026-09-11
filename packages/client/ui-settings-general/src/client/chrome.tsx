@@ -1,6 +1,6 @@
 /**
  * Shell chrome content registered into the shell's trigger/header seats: the
- * trigger row icon + label (figma sidebar foot) and the page title text.
+ * trigger row icon + label (figma sidebar foot) and the panel title text.
  * The shell renders the surrounding chrome (button, nav heading row) and
  * reads each entry's `label` option for aria text.
  */
@@ -37,14 +37,14 @@ export function HeaderContent({ t }: HeaderContentProps) {
   return <>{t('title')}</>
 }
 
-/** Return-action label text props: the standard locale seat only. */
+/** Close-button label text props: the standard locale seat only. */
 export type CloseLabelProps = PropsRuntime<'settings.close'> & PropsLocale<'settings'>
 
 /**
- * Render the settings page's visible return label.
+ * Render the close button's visually-hidden label text.
  * @param props - composed slot props.
  * @returns the label text node.
  */
-export function CloseLabel({ t, presentation }: CloseLabelProps) {
-  return <>{t(presentation === 'modal' ? 'closeDialog' : 'close')}</>
+export function CloseLabel({ t }: CloseLabelProps) {
+  return <>{t('close')}</>
 }

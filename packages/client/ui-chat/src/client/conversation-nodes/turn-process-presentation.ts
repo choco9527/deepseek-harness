@@ -18,7 +18,6 @@ function samePresentation(
     && left.turn === right.turn
     && left.turnClosed === right.turnClosed
     && left.hasExternalProcess === right.hasExternalProcess
-    && left.hasMinimalProcess === right.hasMinimalProcess
     && left.compactAnswer === right.compactAnswer)
 }
 
@@ -46,18 +45,10 @@ function derivePresentation(
   }
 
   let hasExternalProcess = false
-  let hasMinimalProcess = false
   let compactAnswer = true
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
     if (node === undefined || node.kind === 'turn-process') continue
-    if (node.anchorSeq >= spec.processStartSeq
-      && (spec.answerAnchorSeq === null || node.anchorSeq <= spec.answerAnchorSeq)
-      && !TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)) {
-      hasMinimalProcess ||= node.kind === 'assistant-step'
-        ? node.data.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '')
-        : spec.answerAnchorSeq === null || node.anchorSeq < spec.answerAnchorSeq
-    }
     if ((node.kind === 'user' || node.kind === 'steering')
       && (openingHumanAnchor === undefined || node.anchorSeq > openingHumanAnchor)
       && (spec.answerAnchorSeq === null || node.anchorSeq < spec.answerAnchorSeq)) {
@@ -75,7 +66,6 @@ function derivePresentation(
     spec,
     turnClosed: location.turn.status === 'closed',
     hasExternalProcess,
-    hasMinimalProcess,
     compactAnswer,
   }
 }
