@@ -2,10 +2,9 @@ import { Fragment, memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { IconContextInjectionOutline16, DocumentFileIcon, fileSizeText, JsonBlock, projectUserText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
-import type { PromptAnnotation } from '../conversation-nodes/message.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
@@ -16,12 +15,6 @@ type UserFile = Extract<UserMessageNode['content'][number], { type: 'file' }>
 type PresentedAttachment =
   | { readonly type: 'image'; readonly image: MessageImageSource }
   | { readonly type: 'file'; readonly file: UserFile['attachment'] }
-
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0 || dot === name.length - 1) return ''
-  return name.slice(dot + 1).toUpperCase().slice(0, 8)
-}
 
 function contentParts(content: readonly unknown[]): {
   text: string
@@ -160,49 +153,9 @@ function TurnMaxTokensItem({ t }: {
   )
 }
 
-/** Hover preview of selected text associated with one submitted user message. */
-function AnnotationSummary({ annotations, t }: {
-  annotations: readonly PromptAnnotation[]
-  t: ChatViewSlotProps['t']
-}) {
-  const [open, setOpen] = useState(false)
-  const count = annotations.length
-  const countLabel = t(count === 1 ? 'message.annotations.one' : 'message.annotations.other', { count })
-  return (
-    <div
-      className={css.annotationSummary}
-      onMouseEnter={() => { setOpen(true) }}
-      onMouseLeave={() => { setOpen(false) }}
-    >
-      <button
-        type="button"
-        className={css.annotationTrigger}
-        aria-expanded={open}
-        aria-label={t('message.annotations.expand', { count })}
-        onFocus={() => { setOpen(true) }}
-        onBlur={() => { setOpen(false) }}
-      >
-        <span aria-hidden><IconContextInjectionOutline16 size={16} /></span>
-        <span>{countLabel}</span>
-      </button>
-      {open && <div className={css.annotationCard}>
-        {annotations.map((annotation, index) => (
-          <div className={css.annotationItem} key={`${index}:${annotation.text}`}>
-            <span className={css.annotationIndex}>{index + 1}.</span>
-            <div className={css.annotationContent}>
-              <div className={css.annotationLabel}>{t('message.annotations.selectedText')}</div>
-              <div className={css.annotationText} data-message-annotation-text>{annotation.text}</div>
-            </div>
-          </div>
-        ))}
-      </div>}
-    </div>
-  )
-}
-
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], skillNames = [], annotations = [],
+  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], skillNames = [],
   previewAttachments, t,
 }: {
   content: readonly unknown[]
@@ -215,8 +168,6 @@ function UserStyleBubble({
   echo?: boolean
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
-  /** Plugin-owned selected text recorded with this submitted message. */
-  annotations?: readonly PromptAnnotation[]
   /** Skill names the step's `skill-invocation` injections loaded for this message. */
   skillNames?: readonly string[]
   /** Local submission-echo attachments replacing the content-derived attachment sequence. */
@@ -235,7 +186,6 @@ function UserStyleBubble({
       data-submission-echo={echo || undefined}
     >
       <div className={css.userStack}>
-        {annotations.length > 0 && <AnnotationSummary annotations={annotations} t={t} />}
         {attachments.length > 0 && (
           <div className={css.attachmentRow} data-message-attachments>
             {attachments.map((attachment, index) => attachment.type === 'image'
@@ -250,11 +200,11 @@ function UserStyleBubble({
               )
               : (
                 <span key={`file:${index}`} className={css.fileCard} title={attachment.file.name}>
-                  <DocumentFileIcon className={css.fileIcon} />
+                  <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
                   <span className={css.fileContent}>
                     <span className={css.fileName}>{attachment.file.name}</span>
                     <span className={css.fileMeta}>
-                      {[extensionOf(attachment.file.name), fileSizeText(attachment.file.bytes)]
+                      {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
                         .filter(Boolean).join(' ')}
                     </span>
                   </span>
@@ -370,7 +320,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       content={data.content}
       renderMessageImages={renderMessageImages}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      {...data.annotations === undefined ? {} : { annotations: data.annotations }}
       {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
       t={t}
       actions={text => (

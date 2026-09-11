@@ -9,6 +9,7 @@ import type {
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
@@ -18,6 +19,7 @@ import { zh } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
 
 afterEach(cleanup)
 const scrollIntoView = vi.fn()
@@ -78,7 +80,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     expandSidebar: vi.fn(),
     useSessions: hook(sessionState([])),
     useSessionPendingInteraction: hook(noPendingInteraction),
-    useResource,
+    usePanelInfo, useResource,
     useWorkspaces: hook(workspaceState([])),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
@@ -96,7 +98,6 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     createWorkspace: vi.fn(async () => workspace('created', [])),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
     useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
-    usePresentation: selector => selector({ status: 'ready', value: { showSessionSearch: true, showGroupingControls: true }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' }),
     renderSlot: ((_name: string, owner: { open: boolean }) => (owner.open ? <div data-testid="directory-flow" /> : null)) as never,
     t,
     ...overrides,
@@ -112,14 +113,30 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
-  it.each([true, false])('hides the search entry in sidebar width %s without hiding session rows', (wide) => {
-    const { view } = mount({
-      wide,
-      usePresentation: selector => selector({ status: 'ready', value: { showSessionSearch: false, showGroupingControls: false }, base: undefined, user: undefined, revision: 0, writable: true, mode: 'host' }),
+  it('moves focus into Workspace controls without selecting a Session while a main panel is active', () => {
+    const panelInfo = { activePanelId: 'panel-a' as MainPanelId }
+    const b = mount({
+      usePanelInfo: hook(panelInfo),
+      useSessions: hook(sessionState([summary('current', 1)], { current: sid('current') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['current'])])),
     })
-    expect(view.queryByLabelText(t('search.sessions.aria'))).toBeNull()
-    expect(view.queryByRole('button', { name: t('viewOptions.label') })).toBeNull()
+    fireEvent.click(screen.getByText('alpha'))
+    const current = screen.getByText('current').closest('[role="treeitem"]')
+    expect(current?.getAttribute('aria-selected')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+    const input = screen.getByPlaceholderText('搜索会话…')
+    expect(document.activeElement).toBe(input)
+    fireEvent.click(screen.getByRole('button', { name: '清除搜索' }))
+    const add = screen.getByRole('button', { name: '添加工作区' })
+    add.focus()
+    fireEvent.click(add)
+    expect(document.activeElement).toBe(add)
+    expect(screen.getByTestId('directory-flow')).toBeTruthy()
+    expect(panelInfo.activePanelId).toBe('panel-a')
+    expect(b.props.open).not.toHaveBeenCalled()
+    expect(b.props.startSession).not.toHaveBeenCalled()
   })
+
   it('workspace hover card shows a POSIX home descendant as ~', () => {
     vi.useFakeTimers()
     try {

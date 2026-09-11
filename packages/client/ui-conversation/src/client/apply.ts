@@ -28,6 +28,7 @@ import { queueDockEntry } from './queue/QueueDock.tsx'
 import { EnterBehaviorRow } from './settings/EnterBehaviorRow.tsx'
 import type { EnterBehaviorRowInjected } from './settings/EnterBehaviorRow.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
+import { ConversationPanel } from './skeleton/ConversationPanel.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
@@ -84,9 +85,11 @@ const ABSENT_FILE_UPLOADS = {
 }
 
 interface WorkspaceNavigation {
-  connectWorkspace(
+  openSession(sessionId: SessionId): void
+  openWorkspace(
     workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0],
-  ): Promise<SessionId>
+    beforeOpen: (sessionId: SessionId) => void,
+  ): Promise<void>
 }
 
 /** Resolve the session-scoped Conversation action face, failing loud. */
@@ -213,7 +216,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   })
 
   const registerConversationRoot = () => slots.register({
-    name: 'conversation',
+    name: 'main.conversation',
     locale: NS,
     children: {
       'conversation.session': { kind: 'single', scope: 'session' },
@@ -229,8 +232,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       hooks: {
         composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId),
       },
-      selectWorkspace: async (workspaceId) => {
-        const nextId = await workspaceNavigation.connectWorkspace(workspaceId)
+      selectWorkspace: workspaceId => workspaceNavigation.openWorkspace(workspaceId, (nextId) => {
         if (sessionId !== undefined && nextId !== sessionId) {
           const from = inputHub.shell(sessionId)
           const draft = from.snapshot.draft
@@ -250,8 +252,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             }
           }
         }
-        sessions.open(nextId)
-      },
+      }),
     }),
   }, ConversationRoot)
 
@@ -283,7 +284,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     store: conversationStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionHeaderInjected => ({
       hooks: { conversationViews },
-      open: (id) => { sessions.open(id) },
+      open: (id) => { workspaceNavigation.openSession(id) },
       selectView: (view) => {
         activateView(sessionId, view)
         actions.setView(view)
@@ -311,12 +312,11 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           removeAttachment: undefined,
           resolveDraftAttachments: undefined,
           retryFileUpload: undefined,
-          resolveSubmitMode: (running, gesture, steeringAvailable) =>
-            submissionPolicy.resolve(running, gesture, steeringAvailable),
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
           hooks: {
+            busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
             notices: ABSENT_NOTICES,
             presentation: conversationSettings,
@@ -350,8 +350,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         retryFileUpload: (id) => {
           if (sessions.binding(sessionId) !== undefined) conversation.retryFileUpload(sessionId, id)
         },
-        resolveSubmitMode: (running, gesture, steeringAvailable) =>
-          submissionPolicy.resolve(running, gesture, steeringAvailable),
         toggleCommandMenu: inputTriggers === undefined
           ? undefined
           : (selection) => {
@@ -377,6 +375,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           return result.ok && result.value.matched
         },
         hooks: {
+          busyEnter: submissionPolicy.busyEnter,
           fileUploads: conversation.fileUploads,
           notices: shell.notices,
           presentation: conversationSettings,
@@ -387,7 +386,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     },
   }, InputBar)
 
-  slots.inject('conversation', function* () {
+  slots.inject('main', function* () {
+    yield slots.register({
+      name: 'main',
+      key: 'conversation',
+      children: { 'main.conversation': { kind: 'single', scope: 'session-maybe' } },
+    }, ConversationPanel)
     yield registerConversationRoot()
     yield registerConversationSession()
     yield registerConversationHeader()
