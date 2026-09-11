@@ -11,6 +11,7 @@ import type {
   ChatTurnNavigationIndex, ChatTurnProcessPresentation, LegacyConversationSlice, TurnNavigationItem,
 } from '../contract/snapshot.ts'
 import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { AnnotationProjector } from './annotation-projector.ts'
 import { sessionRecallLabels, skillInvocationName } from './event-projection.ts'
 import { sameTurnNavigationItem, turnNavigationItem } from './turn-navigation.ts'
 import { ChatTurnProcessProjector } from './turn-process-presentation.ts'
@@ -964,6 +965,10 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
   private readonly legacy = new LegacySliceBuilder()
   private readonly referenceLabels = new ReferenceLabelProjector()
   private readonly skillNames = new SkillNameProjector()
+  // Runs outermost: it joins durable annotation-context messages onto the
+  // submitted message that carries their submissionId, and hides the
+  // standalone context rows the join consumed.
+  private readonly annotations = new AnnotationProjector()
   private order: readonly string[] = EMPTY_KEYS
   /** Last published timeline: a Turn boundary can land without a new node. */
   private timeline: ConversationTimelineSnapshot | null = null
@@ -977,7 +982,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly nodes: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
-    const nodes = this.skillNames.replace(this.referenceLabels.replace(input.nodes))
+    const nodes = this.annotations.replace(this.skillNames.replace(this.referenceLabels.replace(input.nodes)))
     this.store.replace(nodes)
     this.order = orderedVisibleChatNodes(nodes).map(node => node.key)
     this.locations.rebuild(this.order, this.store)
@@ -993,7 +998,8 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly upserts: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
-    const upserts = this.skillNames.apply(this.referenceLabels.apply(input.upserts, this.store), this.store)
+    const labeled = this.referenceLabels.apply(input.upserts, this.store)
+    const upserts = this.annotations.apply(this.skillNames.apply(labeled, this.store), this.store)
     const processTurns = new Set<number>()
     let structural = false
     const contentOnly: ChatConversationViewNode[] = []

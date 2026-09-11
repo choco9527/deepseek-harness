@@ -33,6 +33,30 @@ function chip(shell: SessionInputShell): void {
 }
 
 describe('reference submission', () => {
+  it('removes one published occurrence without flattening neighbouring chips', () => {
+    const shell = new SessionInputShell({
+      actx: {} as Context,
+      defaultSink: vi.fn(),
+      commandAttachments,
+    })
+    shell.setDraft('@one @two')
+    expect(shell.insertReference({
+      source: 'reference', ref: 'one', label: 'One', clipboardText: '@one',
+    }, { start: 0, end: 4, draftRev: shell.snapshot.draftRev })).toBe(true)
+    expect(shell.insertReference({
+      source: 'reference', ref: 'two', label: 'Two', clipboardText: '@two',
+    }, { start: 2, end: 6, draftRev: shell.snapshot.draftRev })).toBe(true)
+    const [first, second] = shell.snapshot.occurrences
+    expect(first).toBeDefined()
+    expect(second).toBeDefined()
+    expect(shell.removeReference(first!.occurrenceId)).toBe(true)
+    expect(shell.snapshot).toMatchObject({
+      draft: ' @two ',
+      occurrences: [{ occurrenceId: second!.occurrenceId, ref: 'two' }],
+    })
+    expect(shell.removeReference(first!.occurrenceId)).toBe(false)
+  })
+
   it('mirrors canonical reference text so a persisted draft remains resolvable after remount', async () => {
     const mirror = vi.fn()
     const first = new SessionInputShell({
@@ -209,6 +233,27 @@ describe('reference submission', () => {
 })
 
 describe('submit transaction hardening', () => {
+  it('sends plugin-owned draft context without placing it in the editor and restores it after rejection', async () => {
+    const settle = vi.fn()
+    const contexts = { contexts: [{ plugin: 'dsh-add-to-chat', text: '所选文本：\n引用内容', form: 'annotation' as const }], settle }
+    const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'error', text: 'host rejected' }))
+    const shell = new SessionInputShell({
+      actx: {} as Context,
+      defaultSink: sink,
+      hasDraftContexts: () => true,
+      draftContexts: () => contexts,
+      commandAttachments,
+    })
+
+    shell.submit('queue')
+    await vi.waitFor(() => {
+      expect(sink).toHaveBeenCalledWith('', [], 'queue', expect.any(AbortSignal), contexts)
+    })
+    expect(shell.snapshot.draft).toBe('')
+    expect(shell.snapshot.occurrences).toEqual([])
+    await vi.waitFor(() => { expect(settle).toHaveBeenCalledWith(false) })
+  })
+
   it('sends one image-only prompt per settlement, ignoring Enter during the round-trip', async () => {
     let settle!: (outcome: SubmitOutcome) => void
     const sink = vi.fn(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))

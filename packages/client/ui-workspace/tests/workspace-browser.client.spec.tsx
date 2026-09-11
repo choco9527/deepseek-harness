@@ -188,6 +188,9 @@ describe('WorkspaceBrowser', () => {
     // Sessions hidden while their group is folded.
     expect(screen.queryByText('alpha-s')).toBeNull()
 
+    // The stable hook an owning deployment addresses to hide this control;
+    // class names are build-generated and the label is localized.
+    expect(screen.getByRole('button', { name: '视图选项' }).hasAttribute('data-dsh-view-options')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     expect(screen.getByText('分组方式')).toBeTruthy() // the menu heading label
     expect(screen.getByRole('separator')).toBeTruthy()

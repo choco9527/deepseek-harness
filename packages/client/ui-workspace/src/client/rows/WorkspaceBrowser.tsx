@@ -200,6 +200,11 @@ function ViewOptionsMenu({ groupBy, orderBy, onGroupPick, onOrderPick, t }: {
           <button
             type="button"
             className={clsx(css.iconButton, css.wide)}
+            // BBA-local: a stable hook for deployments that keep grouping and
+            // sorting out of the product surface. The class names are
+            // build-generated and the aria-label is localized, so neither is
+            // addressable from an owning client plugin.
+            data-dsh-view-options=""
             aria-label={t('viewOptions.label')}
             onClick={() => { setOpen(v => !v) }}
           >

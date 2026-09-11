@@ -14,7 +14,7 @@ import {
 } from '@deepseek-ai/dsh-client-store'
 import type { LexicalEditor, NodeKey } from 'lexical'
 import {
-  $addUpdateTag, $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection,
+  $addUpdateTag, $createParagraphNode, $createTextNode, $getNodeByKey, $getRoot, $getSelection, $isRangeSelection,
   CLEAR_HISTORY_COMMAND, createEditor, HISTORY_MERGE_TAG, PASTE_TAG,
 } from 'lexical'
 import { registerPlainText } from '@lexical/plain-text'
@@ -27,8 +27,9 @@ import type {
   SubmitOutcome, TokenSpan,
 } from '../contract/input.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
+import { EMPTY_DRAFT_CONTEXTS, type CapturedDraftContexts } from './draft-contexts.ts'
 import { SubmitMachine } from './machine.ts'
-import { ReferenceChipNode, $createReferenceChipNode } from './editor/chip-node.tsx'
+import { ReferenceChipNode, $createReferenceChipNode, $isReferenceChipNode } from './editor/chip-node.tsx'
 import { refreshClaimDecoration, registerClaimDecoration } from './editor/claim-decor.ts'
 import { registerTextRefDecoration, rescanTextRefs, TextRefNode } from './editor/text-ref.ts'
 import type { EditorProjection } from './editor/projection.ts'
@@ -66,7 +67,12 @@ export interface SessionInputDeps {
     attachmentIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
+    contexts?: CapturedDraftContexts,
   ): Promise<SubmitOutcome>
+  /** Whether one plugin-owned context source has content for the active Session. */
+  hasDraftContexts?: (() => boolean) | undefined
+  /** Capture plugin-owned context for one detached default send. */
+  draftContexts?: (() => CapturedDraftContexts) | undefined
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
   commandAttachments: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -118,6 +124,8 @@ interface DetachedDraft {
   readonly draft: string
   readonly occurrences: readonly Occurrence[]
   readonly attachmentIds: readonly DraftAttachmentId[]
+  /** Plugin-owned context that returns to its source if this send fails. */
+  readonly contexts: CapturedDraftContexts
 }
 
 /**
@@ -359,7 +367,8 @@ export class SessionInputShell implements SessionInput {
    * dismisses and the menu tracks frozen.
    */
   submit(mode: InputSubmitMode = 'queue'): void {
-    if (this.snapshot.draft.trim() === '' && this.attachmentIds.length > 0) {
+    const hasDraftContexts = this.deps.hasDraftContexts?.() === true
+    if (this.snapshot.draft.trim() === '' && this.attachmentIds.length > 0 && !hasDraftContexts) {
       if (this.snapshot.phase === 'plain') {
         const attachmentIds = [...this.attachmentIds]
         const controller = new AbortController()
@@ -367,7 +376,7 @@ export class SessionInputShell implements SessionInput {
         const flight = this.attachmentFlightSeq
         this.attachmentFlights.set(flight, { controller, attachmentIds })
         this.commitSend(attachmentIds)
-        void this.deps.defaultSink('', attachmentIds, mode, controller.signal).then((outcome) => {
+        void this.defaultSink('', attachmentIds, mode, controller.signal, EMPTY_DRAFT_CONTEXTS).then((outcome) => {
           if (this.disposed || !this.attachmentFlights.delete(flight)) return
           if (outcome.kind === 'success') return
           this.restoreAttachments(attachmentIds)
@@ -389,7 +398,7 @@ export class SessionInputShell implements SessionInput {
       this.notify('error', this.deps.commandAttachments.unsupportedNotice(before.claim?.token ?? before.draft))
       return
     }
-    this.dispatchRun(({ type: 'enter', mode, draft: this.projection.clipboardText }))
+    this.dispatchRun(({ type: 'enter', mode, draft: this.projection.clipboardText, hasDraftContexts }))
     const phase = this.snapshot.phase
     if (phase === 'adjudicating' || phase === 'submitting') {
       this.deps.popup?.()?.dismiss()
@@ -507,6 +516,28 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
+   * Remove one reference chip addressed by its published occurrence id.
+   * The id belongs to this shell only; stale ids and chips already removed by
+   * the editor return false without changing the draft.
+   * @param occurrenceId - shell-assigned identity published in InputState.
+   * @returns whether a live reference chip was removed.
+   */
+  removeReference(occurrenceId: number): boolean {
+    const phase = this.core.state.phase
+    if (phase !== 'plain' && phase !== 'claimed') return false
+    const key = [...this.occurrenceIds].find(([, id]) => id === occurrenceId)?.[0]
+    if (key === undefined) return false
+    let removed = false
+    this.applyEdit(() => {
+      const node = $getNodeByKey(key)
+      if (!$isReferenceChipNode(node)) return
+      node.remove()
+      removed = true
+    })
+    return removed
+  }
+
+  /**
    * Consume one command token after business success (scoped consume-token
    * event listener body). Span guard: revision CAS then splice; bare-token
    * guard: trimmed-draft equality then clear.
@@ -572,6 +603,7 @@ export class SessionInputShell implements SessionInput {
     const retained = new Set(this.attachmentIds)
     for (const record of this.detachedDrafts.values()) {
       for (const attachmentId of record.attachmentIds) retained.add(attachmentId)
+      record.contexts.settle(false)
     }
     for (const flight of this.attachmentFlights.values()) {
       for (const attachmentId of flight.attachmentIds) retained.add(attachmentId)
@@ -691,14 +723,15 @@ export class SessionInputShell implements SessionInput {
     const attachmentIds = [...this.attachmentIds]
     this.attachmentIds = []
     const occurrences = this.projection.occurrences
-    const record = { draft, occurrences, attachmentIds }
+    const contexts = this.deps.draftContexts?.() ?? EMPTY_DRAFT_CONTEXTS
+    const record = { draft, occurrences, attachmentIds, contexts }
     this.detachedDrafts.set(attempt.seq, record)
     if (this.failedRestoreRev === this.rev) {
       this.failedDetached.clear()
       this.failedRestoreRev = undefined
     }
     if (occurrences.length === 0) {
-      this.settleSink(attempt, this.deps.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal))
+      this.settleSink(attempt, this.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal, contexts))
       return
     }
     const inputTriggers = this.deps.inputTriggers?.()
@@ -722,7 +755,7 @@ export class SessionInputShell implements SessionInput {
           cursor = part.offset + part.length
         }
         out += draft.slice(cursor)
-        this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal))
+        this.settleSink(attempt, this.defaultSink(out.trim(), attachmentIds, mode, attempt.signal, contexts))
       },
       (error: unknown) => {
         if (this.dead(attempt)) return
@@ -730,6 +763,19 @@ export class SessionInputShell implements SessionInput {
         this.settleDetachedFailure(attempt, message)
       },
     )
+  }
+
+  /** Preserve the four-argument sink ABI until a plugin contributes context. */
+  private defaultSink(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+    mode: InputSubmitMode,
+    signal: AbortSignal,
+    contexts: CapturedDraftContexts,
+  ): Promise<SubmitOutcome> {
+    return contexts === EMPTY_DRAFT_CONTEXTS
+      ? this.deps.defaultSink(text, imageIds, mode, signal)
+      : this.deps.defaultSink(text, imageIds, mode, signal, contexts)
   }
 
   /** Settle one detached default send independently of other sends. */
@@ -744,7 +790,9 @@ export class SessionInputShell implements SessionInput {
           this.settleDetachedFailure(attempt, outcome.text)
           return
         }
+        const record = this.detachedDrafts.get(attempt.seq)
         this.detachedDrafts.delete(attempt.seq)
+        record?.contexts.settle(true)
         this.dispatchRun(({ type: 'sink-settled', attempt, ok: true, outcome }))
       },
       (error: unknown) => {
@@ -759,6 +807,7 @@ export class SessionInputShell implements SessionInput {
     const record = this.detachedDrafts.get(attempt.seq)
     if (record === undefined) return
     this.detachedDrafts.delete(attempt.seq)
+    record.contexts.settle(false)
     this.restoreAttachments(record.attachmentIds)
     this.failedDetached.set(attempt.seq, record)
     if (this.projection.clipboardText === '' || this.failedRestoreRev === this.rev) {

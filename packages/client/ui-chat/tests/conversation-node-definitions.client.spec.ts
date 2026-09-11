@@ -1918,6 +1918,42 @@ describe('built-in conversation node Definitions', () => {
     expect(users[2]?.data).not.toHaveProperty('referenceLabels')
   })
 
+  it('attaches submitted annotation contexts to their correlated user message', () => {
+    const value = assembler([
+      at(1, 'user/message', {
+        ...textMessage('first-annotation', '引用助手回复：\n第一段'),
+        source: {
+          kind: 'plugin',
+          plugin: 'dsh-add-to-chat',
+          form: 'annotation',
+          submissionId: 'request-1',
+        },
+      }, { surfaceOp: 'append' }),
+      at(2, 'user/message', {
+        ...textMessage('second-annotation', '引用助手回复：\n第二段'),
+        source: {
+          kind: 'plugin',
+          plugin: 'dsh-add-to-chat',
+          form: 'annotation',
+          submissionId: 'request-1',
+        },
+      }, { surfaceOp: 'append' }),
+      at(3, 'user/message', {
+        ...textMessage('annotated-user', '请比较它们'),
+        source: { kind: 'user', rpcId: 'request-1' },
+      }, { surfaceOp: 'append' }),
+    ])
+
+    const current = snapshot(value)
+    const user = node(current, 'user')
+    const contexts = [...current.nodes.values()].filter(candidate => candidate.kind === 'context')
+    expect(user?.data).toMatchObject({
+      annotations: [{ text: '引用助手回复：\n第一段' }, { text: '引用助手回复：\n第二段' }],
+    })
+    expect(contexts).toHaveLength(2)
+    expect(contexts.every(candidate => candidate.visibility === 'hidden')).toBe(true)
+  })
+
   it('updates an already published direct node when its following recall arrives', () => {
     const value = assembler([
       at(1, 'user/message', textMessage('citing-user', '@Research notes what changed?'), { surfaceOp: 'append' }),

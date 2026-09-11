@@ -400,6 +400,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   ctx.plugin(ConversationController, {
     input: inputHub,
     blocks: composerBlocks,
+    draftContexts: inputHub.draftContexts,
     maxConcurrentFileUploads,
   })
   ctx.plugin(todoDockEntry)

@@ -82,6 +82,16 @@ export type PromptContentPart =
   }
   | { readonly type: 'file'; readonly receiptId: Branded<'file-upload-receipt-id'> }
 
+/** One plugin-owned text item added to the same model request as a prompt. */
+export interface PromptContext {
+  /** Installed plugin identity recorded on the durable user message. */
+  readonly plugin: string
+  /** Plugin-defined text visible to the model. */
+  readonly text: string
+  /** Optional semantic presentation the Host records beside this context. */
+  readonly form?: 'annotation'
+}
+
 /** Complete model selection for one Session. */
 export interface ModelSelection {
   readonly provider: string
@@ -314,6 +324,8 @@ export interface SessionPromptRequest {
   readonly mode: 'queue' | 'steer'
   /** At least one non-whitespace text part or attachment. */
   readonly content: readonly PromptContentPart[]
+  /** Plugin-owned text items injected before this prompt enters the Agent inbox. */
+  readonly contexts?: readonly PromptContext[]
   readonly clientTimeZone?: string
 }
 

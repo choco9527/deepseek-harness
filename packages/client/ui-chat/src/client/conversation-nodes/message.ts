@@ -10,6 +10,8 @@ import { contextForm, contextProvenance } from './event-projection.ts'
 interface ReferencedUserMessageNode extends UserMessageNode {
   /** Labels cited by the immediately following session-reference context. */
   readonly referenceLabels?: readonly string[]
+  /** Plugin-owned selected text supplied with this submitted prompt. */
+  readonly annotations?: readonly PromptAnnotation[]
   /** Skill names the same step's `skill-invocation` injections loaded. */
   readonly skillNames?: readonly string[]
 }
@@ -17,8 +19,16 @@ interface ReferencedUserMessageNode extends UserMessageNode {
 interface ReferencedSteeringMessageNode extends SteeringMessageNode {
   /** Labels cited by the immediately following session-reference context. */
   readonly referenceLabels?: readonly string[]
-  /** Skill names the same step's `skill-invocation` injections loaded. */
+  /** Plugin-owned selected text supplied with this submitted prompt. */
+  readonly annotations?: readonly PromptAnnotation[]  /** Skill names the same step's `skill-invocation` injections loaded. */
   readonly skillNames?: readonly string[]
+
+}
+
+/** One persisted text annotation associated with a user-authored message. */
+export interface PromptAnnotation {
+  /** Exact selected text the plugin supplied to the model. */
+  readonly text: string
 }
 
 type MessageNode = ReferencedUserMessageNode | ReferencedSteeringMessageNode | ContextMessageNode
@@ -85,7 +95,15 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   update: context => context.state,
   buildViewNode: (context) => {
     if (context.state === undefined) return null
-    return chatNode(context, context.state.kind, context.state.seq, context.state)
+    return chatNode(
+      context,
+      context.state.kind,
+      context.state.seq,
+      context.state,
+      context.state.kind === 'context' && context.state.form === 'annotation'
+        ? { visibility: 'hidden' }
+        : undefined,
+    )
   },
 }
 

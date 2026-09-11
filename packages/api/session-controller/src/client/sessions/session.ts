@@ -10,6 +10,7 @@ import { SessionEventStream } from '../transport.ts'
 import type { SessionJournalChange } from '../transport.ts'
 import type {
   PromptContentPart,
+  PromptContext,
   QueueAction,
   SessionAddress,
   SessionAssistantStreamBaseline,
@@ -227,6 +228,7 @@ export class Session implements SessionFace {
    * @param mode - queue appends after the current turn; steer interrupts it.
    * @param signal - optional caller cancellation for the complete admission round-trip.
    * @param requestId - identity from {@link beginSubmission}; a failed identified prompt retires its echo.
+   * @param contexts - plugin-owned text recorded before this prompt in the same admitted request.
    * @returns the prompt result (also mirrored into promptError on failure).
    */
   async prompt(
@@ -234,6 +236,7 @@ export class Session implements SessionFace {
     mode: 'queue' | 'steer',
     signal?: AbortSignal,
     requestId?: SessionRequestId,
+    contexts?: readonly PromptContext[],
   ): Promise<RemoteResult<{ accepted: true }>> {
     this.promptError = null
     this.lastAgentError = null
@@ -251,6 +254,7 @@ export class Session implements SessionFace {
         sessionId: this.sessionId,
         mode,
         content,
+        ...(contexts === undefined || contexts.length === 0 ? {} : { contexts }),
         clientTimeZone,
       }, signal)
     } else if (content.some(part => part.type === 'file')) {
@@ -263,6 +267,9 @@ export class Session implements SessionFace {
         ),
       }
     } else {
+      if (contexts !== undefined && contexts.length > 0) {
+        throw new Error('subagent prompts do not support plugin-owned draft context')
+      }
       // The preceding branch rejects file parts before the narrower subagent
       // wire type is used; this array is not filtered or reordered.
       const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]

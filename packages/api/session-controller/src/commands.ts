@@ -50,12 +50,26 @@ import type {
   SessionUpdateQueueRequest,
   SessionUpdateQueueValue,
   SessionRequestId,
+  PromptContext,
 } from './types.ts'
 
 interface SessionReadState {
   readonly id: SessionId
   readonly header: SessionHeader
   readonly events: readonly SessionEvent[]
+}
+
+/** Reject malformed browser-supplied plugin context before it reaches Agent state. */
+function promptContexts(value: readonly PromptContext[] | undefined): readonly PromptContext[] {
+  if (value === undefined) return []
+  for (const context of value) {
+    const form: unknown = context.form
+    if (typeof context.plugin !== 'string' || context.plugin.trim() === '' || typeof context.text !== 'string'
+      || (form !== undefined && form !== 'annotation')) {
+      throw new RemoteError('gateway/bad-request', 'prompt contexts require a non-empty plugin, text, and known form', {})
+    }
+  }
+  return value
 }
 
 type PromptContentCandidate =
@@ -317,6 +331,7 @@ export class SessionCommandController {
         { value: request.clientTimeZone },
       )
     }
+    const contexts = promptContexts(request.contexts)
     const agent = await this.resolveAgent(request.sessionId)
     if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
     const selection = this.agents.selectionFor(agent).current
@@ -360,6 +375,22 @@ export class SessionCommandController {
           )
         }
         using binding = this.ctx.fileUploads.bindPrompt(agent, admission.receiptIds, request.requestId)
+        // Injected ahead of the prompt so the model reads the plugin's text as
+        // established context. The submissionId lets the client rejoin these rows
+        // onto the user message they were attached to.
+        for (const context of contexts) {
+          agent.inject(createUserMessage({
+            content: [{ type: 'text', text: context.text }],
+            source: context.form === undefined
+              ? { kind: 'plugin', plugin: context.plugin }
+              : {
+                kind: 'plugin',
+                plugin: context.plugin,
+                form: context.form,
+                submissionId: String(request.requestId),
+              },
+          }))
+        }
         if (request.mode === 'steer') agent.steer(message)
         else agent.followup(message)
         binding.commit()

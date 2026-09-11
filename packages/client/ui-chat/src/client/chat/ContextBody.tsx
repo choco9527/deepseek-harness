@@ -580,6 +580,9 @@ export function contextBody(
       return recalledSessions(props.source) === null
         ? opaque
         : { rendered: 'recall', summary: null, body: <RecallBody {...props} /> }
+    // Annotation contexts render with their submitted user or steering message.
+    case 'annotation':
+      return opaque
     case null:
       return opaque
     /* v8 ignore next 4 -- closed-union backstop; the compiler rejects a new
