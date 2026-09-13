@@ -386,8 +386,14 @@ export type SessionRequestId = Branded<'session-request-id'>
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    /** Browser prompt correlation and optional Host-validated time zone. */
-    'user-rpc': { kind: 'user'; rpcId: SessionRequestId; clientTimeZone?: string }
+    /** Browser prompt identity, validated time zone, and context owned by its pending inbox item. */
+    'user-rpc': {
+      kind: 'user'
+      rpcId: SessionRequestId
+      clientTimeZone?: string
+      /** Expanded into plugin messages only when this prompt is admitted; absent from the delivered user source. */
+      contexts?: readonly PromptContext[]
+    }
   }
 }
 

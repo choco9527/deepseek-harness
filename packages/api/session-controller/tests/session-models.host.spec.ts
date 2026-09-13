@@ -279,7 +279,7 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('injects plugin-owned prompt context before the admitted user prompt', async () => {
+  it('queues plugin-owned context inside the admitted user prompt', async () => {
     const { ctx, agent, sessionId } = await harness()
     const inject = vi.fn()
     const followup = vi.fn()
@@ -297,18 +297,12 @@ describe('Web session model selection', () => {
     }))
 
     expect(result.ok).toBe(true)
-    expect(inject.mock.invocationCallOrder[0]).toBeLessThan(followup.mock.invocationCallOrder[0] ?? Infinity)
-    expect(inject).toHaveBeenCalledWith(expect.objectContaining({
-      source: {
-        kind: 'plugin',
-        plugin: 'dsh-add-to-chat',
-        form: 'annotation',
-        submissionId: expect.any(String) as string,
-      },
-      content: [{ type: 'text', text: '所选文本：\n参考这一段' }],
-    }))
+    expect(inject).not.toHaveBeenCalled()
     expect(followup).toHaveBeenCalledWith(expect.objectContaining({
-      source: expect.objectContaining({ kind: 'user' }) as { kind: 'user' },
+      source: {
+        kind: 'user', rpcId: expect.any(String) as string,
+        contexts: [{ plugin: 'dsh-add-to-chat', text: '所选文本：\n参考这一段', form: 'annotation' }],
+      },
       content: [{ type: 'text', text: '请继续' }],
     }))
     await ctx.fiber.dispose()

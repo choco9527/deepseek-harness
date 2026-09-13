@@ -1,0 +1,27 @@
+[
+  {
+    "turn": 1,
+    "source": "user",
+    "text": "active"
+  },
+  {
+    "turn": 2,
+    "source": "plugin",
+    "text": "queued reference"
+  },
+  {
+    "turn": 2,
+    "source": "user",
+    "text": "queued"
+  },
+  {
+    "turn": 3,
+    "source": "plugin",
+    "text": "reference only"
+  },
+  {
+    "turn": 3,
+    "source": "user",
+    "text": ""
+  }
+]

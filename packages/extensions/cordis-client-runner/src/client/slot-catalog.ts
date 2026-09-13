@@ -1527,8 +1527,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'settings.action',
     kind: 'list',
     scope: 'root',
-    summary: 'Optional actions rendered in the content-column header before Close.',
-    doc: 'Optional actions rendered in the content-column header before Close.\nRegistrants own visibility, behavior, copy, and failure presentation;\nthe shell supplies only the ordered render site.',
+    summary: 'Optional actions rendered in the content-column header.',
+    doc: 'Optional actions rendered in the content-column header.\nRegistrants own visibility, behavior, copy, and failure presentation;\nthe shell supplies only the ordered render site.',
     registerOptions: [
       {
         name: 'id',
@@ -1576,11 +1576,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'settings.close',
     kind: 'single',
     scope: 'root',
-    summary: 'The close button\'s visually-hidden label text (the button itself — icon, geometry, focus — is shell chrome).',
-    doc: 'The close button\'s visually-hidden label text (the button itself —\nicon, geometry, focus — is shell chrome). Absent contribution leaves\nthe button without an accessible name (broken-composition state).',
+    summary: 'The visible return action label (the button icon, geometry, and focus are shell chrome).',
+    doc: 'The visible return action label (the button icon, geometry, and focus\nare shell chrome). Absent contribution leaves the action without an\naccessible name (broken-composition state).',
     registerOptions: [],
     ownerProps: [
-      '/** Owner share of the header title seat (the shell supplies nothing). */\nexport interface SettingsHeaderOwnerProps {\n  /** Marker field: header owner props are intentionally empty. */\n  children?: never\n}',
+      '/** The settings shell identifies the label\'s close or return presentation. */\nexport interface SettingsCloseOwnerProps {\n  /** Omission preserves the return label for independent existing registrants. */\n  presentation?: \'modal\' | \'page\'\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -1660,8 +1660,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'settings.header',
     kind: 'single',
     scope: 'root',
-    summary: 'The panel title text seat.',
-    doc: 'The panel title text seat. Content renders inside the nav heading row;\nthe dialog\'s accessible name points at that node via aria-labelledby.\nAbsent contribution leaves the heading empty.',
+    summary: 'The page title text seat.',
+    doc: 'The page title text seat. Content renders inside the nav heading row;\nthe dialog\'s accessible name points at that node via aria-labelledby.\nAbsent contribution leaves the heading empty.',
     registerOptions: [],
     ownerProps: [
       '/** Owner share of the header title seat (the shell supplies nothing). */\nexport interface SettingsHeaderOwnerProps {\n  /** Marker field: header owner props are intentionally empty. */\n  children?: never\n}',
@@ -1797,7 +1797,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Owner share of the currently active settings-backed onboarding step. */\nexport interface SettingsOnboardingOwnerProps {\n  /** Stable id of the step currently selected by the coordinator. */\n  stepId: string\n  /** Complete or skip this step and transfer ownership to the next entry. */\n  complete: () => void\n  /** Open the settings panel directly on one registered section. */\n  openSection: (id: string) => void\n}',
+      '/** Owner share of the currently active settings-backed onboarding step. */\nexport interface SettingsOnboardingOwnerProps {\n  /** Stable id of the step currently selected by the coordinator. */\n  stepId: string\n  /** Complete or skip this step and transfer ownership to the next entry. */\n  complete: () => void\n  /** Open the settings page directly on one registered section. */\n  openSection: (id: string) => void\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -1915,7 +1915,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'list',
     scope: 'root',
     summary: 'One settings page per list entry.',
-    doc: 'One settings page per list entry. Registrant options carry the nav\nidentity: `id` (section key, drives `only` filtering), `order` (nav\nposition), `label` (registrant-localized display text — the registrant\nre-registers with fresh text on locale change, so the shell never\nsubscribes locale state; the ledger bump doubles as the shell\'s\nre-render trigger). Sections render inside the panel content column.\n(`settings.general.item`, declared by ui-settings-general\'s General\nentry, is typed in the locale package — the common dependency of every\nitem registrant; the shell neither declares nor renders it.)',
+    doc: 'One settings page per list entry. Registrant options carry the nav\nidentity: `id` (section key, drives `only` filtering), `order` (nav\nposition), `label` (registrant-localized display text — the registrant\nre-registers with fresh text on locale change, so the shell never\nsubscribes locale state; the ledger bump doubles as the shell\'s\nre-render trigger). Sections render inside the page content column.\n(`settings.general.item`, declared by ui-settings-general\'s General\nentry, is typed in the locale package — the common dependency of every\nitem registrant; the shell neither declares nor renders it.)',
     registerOptions: [
       {
         name: 'id',
@@ -1937,7 +1937,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/**\n * Owner share of a settings section entry. The shell owns modal visibility\n * and navigation; a section\'s data arrives through its own inject faces and\n * stores. `close` is the one shell affordance a section receives, for flows\n * that leave settings altogether (starting a session from a section) — the\n * onboarding coordinator\'s `openSection`/`complete` precedent, inverted.\n */\nexport interface SettingsSectionOwnerProps {\n  /** Close the settings panel (the shell owns the open state). */\n  close: () => void\n}',
+      '/**\n * Owner share of a settings section entry. The shell owns page visibility\n * and navigation; a section\'s data arrives through its own inject faces and\n * stores. `close` is the one shell affordance a section receives, for flows\n * that leave settings altogether (starting a session from a section) — the\n * onboarding coordinator\'s `openSection`/`complete` precedent, inverted.\n */\nexport interface SettingsSectionOwnerProps {\n  /** Return from settings to the application (the shell owns the open state). */\n  close: () => void\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
