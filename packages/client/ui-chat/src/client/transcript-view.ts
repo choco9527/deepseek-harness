@@ -14,8 +14,10 @@ export class TranscriptViewPolicy {
 
   /**
    * @param host - durable Chat settings scope.
+   * @param toolsOnly - application-owned presentation that ignores saved preferences.
    */
-  constructor(private readonly host: SettingsScope<ChatSettings>) {
+  constructor(private readonly host: SettingsScope<ChatSettings>, private readonly toolsOnly = false) {
+    if (toolsOnly) return
     host.subscribe(() => { this.adopt() })
     this.adopt()
   }
@@ -25,6 +27,7 @@ export class TranscriptViewPolicy {
    * @param mode - Normal or Compact transcript presentation.
    */
   setMode(mode: TranscriptViewMode): void {
+    if (this.toolsOnly) return
     if (this.mode.getSnapshot() === mode) return
     this.mode.set(mode)
     void this.host.set(TRANSCRIPT_VIEW_FIELD, mode)

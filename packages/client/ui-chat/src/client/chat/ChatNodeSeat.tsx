@@ -14,6 +14,7 @@ interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly useChatNodeProcess: ChatViewSlotProps['useChatNodeProcess']
   readonly historyIncomplete: boolean
   readonly compactTranscript: boolean
+  readonly toolsOnlyTranscript?: boolean
   readonly useStore: ChatViewSlotProps['useStore']
   readonly actions: ChatViewSlotProps['actions']
   readonly renderSlot: ChatViewSlotProps['renderSlot']
@@ -37,6 +38,7 @@ function turnOf(node: ChatNode | undefined): number | undefined {
 /** Subscribe, apply Turn-process visibility, and dispatch one stable Context key. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
   nodeKey, useChatNode, useChatNodeProcess, historyIncomplete, compactTranscript,
+  toolsOnlyTranscript = false,
   cwd, openFile, inspectCall, forkAt,
   loadImage, renderMessageImages, fileMentions, useStore, actions, renderSlot, t,
 }: ChatNodeSeatProps) {
@@ -61,7 +63,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   }, [actions, processSpec])
   const processWindowReady = processSpec !== undefined
     && processPresentation !== undefined
-    && compactTranscript
+    && (toolsOnlyTranscript || compactTranscript)
     && processSpec.answerAnchorSeq !== null
     && processPresentation.turn === processSpec.turn
     && processPresentation.turnClosed
@@ -69,6 +71,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const processMember = routedNode !== undefined
     && processWindowReady
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
+    && (!toolsOnlyTranscript || routedNode.kind === 'tool-call')
     && routedNode.anchorSeq >= processSpec.processStartSeq
     && routedNode.anchorSeq < processSpec.answerAnchorSeq
   const processAnswer = routedNode !== undefined
@@ -78,20 +81,24 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const ownsDisclosure = routedNode?.kind === 'turn-process' || processAnswer
   const foldable = processWindowReady
     && (processMember || (ownsDisclosure
-      && (processPresentation.hasExternalProcess || processSpec.inlineReasoning)))
+      && (toolsOnlyTranscript
+        ? processSpec.toolCallCount + processSpec.subagentCount > 0
+        : processPresentation.hasExternalProcess || processSpec.inlineReasoning)))
   const turnProcess = useMemo(() => processSpec === undefined
     ? undefined
     : {
       spec: processSpec,
+      toolsOnly: toolsOnlyTranscript,
       foldable,
       open: processOpen,
       setOpen,
     }, [
-    foldable, processOpen, processSpec, setOpen,
+    foldable, processOpen, processSpec, setOpen, toolsOnlyTranscript,
   ])
   const controllerInactive = routedNode?.kind === 'turn-process'
     && !foldable
   const compactAnswer = processAnswer
+    && !toolsOnlyTranscript
     && foldable
     && processPresentation.compactAnswer
     && !processOpen

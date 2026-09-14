@@ -19,7 +19,7 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
       { count: node.data.toolCallCount },
     ))
   }
-  if (node.data.messageCount > 0) {
+  if (!turnProcess.toolsOnly && node.data.messageCount > 0) {
     labels.push(t(
       node.data.messageCount === 1
         ? 'message.turnProcess.messages.one'
@@ -44,7 +44,7 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
       className={css.root}
       data-open={open || undefined}
       data-turn-process={node.data.turn}
-      data-turn-process-messages={node.data.messageCount}
+      data-turn-process-messages={turnProcess.toolsOnly ? undefined : node.data.messageCount}
       data-turn-process-tool-calls={node.data.toolCallCount}
       data-turn-process-subagents={node.data.subagentCount}
       aria-expanded={open}

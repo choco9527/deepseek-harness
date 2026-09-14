@@ -1,0 +1,3 @@
+- id: ui-chat
+  config:
+    toolsOnlyTranscript: true

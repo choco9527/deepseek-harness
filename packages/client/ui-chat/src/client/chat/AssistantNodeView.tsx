@@ -21,6 +21,7 @@ export const AssistantNodeView = memo(function AssistantNodeView({
     [fileMentions, owner],
   )
   const reasoningHidden = turnProcess !== undefined
+    && !turnProcess.toolsOnly
     && turnProcess.foldable
     && turnProcess.spec.answerStep === data.step
     && turnProcess.spec.inlineReasoning

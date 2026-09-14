@@ -17,12 +17,13 @@ import type {
   ConversationLocationDataSource, ConversationLocationDataStore, ConversationTurnDataMap,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
-  apply as applyChat, EMPTY_CHAT_SNAPSHOT, inject as injectChat,
+  apply as applyChat, Config, EMPTY_CHAT_SNAPSHOT, inject as injectChat,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
   ChatNodeTurnDataInjected, ChatSnapshot, TranscriptViewRowInjected, UseChatNodeTurnData,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
+import { CHAT_PRESENTATION_GLOBAL } from '../src/config.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationTurnDataMap {
@@ -34,7 +35,7 @@ usePinnedBrowserLanguages('zh-CN')
 
 const SID = 'session-1' as SessionId
 
-async function bench() {
+async function bench(config: Config = Config({})) {
   const runtime = await SlotTestRuntime.create()
   const chatSettings = stubSettingsScope<ChatSettings>()
   runtime.ctx.provide('settingsScope', {
@@ -67,7 +68,7 @@ async function bench() {
     apply: applyConversation,
   })
   const provide = vi.spyOn(runtime.ctx.uiSession, 'provide')
-  const chat = await runtime.mount({ inject: [...injectChat], apply: applyChat })
+  const chat = await runtime.mount({ inject: [...injectChat], apply: ctx => applyChat(ctx, config) })
   const sourceDescriptor = provide.mock.calls[0]?.[0]
   if (sourceDescriptor === undefined) throw new Error('ui-chat did not provide its standard source')
   return { runtime, conversation, chat, chatSettings, sourceDescriptor }
@@ -78,6 +79,30 @@ function storeOf(runtime: SlotTestRuntime, key: 'conversation.session' | 'conver
 }
 
 describe('Chat apply wiring', () => {
+  it('adopts the Host bootstrap even when the browser Loader supplies default config', async () => {
+    vi.stubGlobal(CHAT_PRESENTATION_GLOBAL, { toolsOnlyTranscript: true })
+    try {
+      const b = await bench(Config({}))
+      expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id)).toEqual(['composer-enter'])
+      await b.runtime.dispose()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('hides only the transcript selector when the application owns tool folding', async () => {
+    const b = await bench(Config({ toolsOnlyTranscript: true }))
+    expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id))
+      .toEqual(['composer-enter'])
+    await b.runtime.dispose()
+  })
+
+  it('validates the opt-in without changing the default', () => {
+    expect(Config({})).toEqual({ toolsOnlyTranscript: false })
+    // @ts-expect-error Exercise invalid external configuration at the schema boundary.
+    expect(() => Config({ toolsOnlyTranscript: 'yes' })).toThrow()
+  })
+
   it('contributes Chat View, node renderers, and stats', async () => {
     const b = await bench()
     const views = b.runtime.slots.entries('conversation.view')

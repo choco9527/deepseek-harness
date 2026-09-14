@@ -2452,6 +2452,9 @@ importers:
       '@deepseek-ai/dsh-compaction':
         specifier: workspace:^
         version: link:../../compaction/compaction
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-chat",
   "description": "Chat Conversation target, node definitions, renderers, and details surface",
-  "version": "0.1.5-rc.1",
+  "version": "0.1.5-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -73,6 +73,7 @@
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
     "@deepseek-ai/dsh-commands": "workspace:^",
     "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-llm-retry": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",

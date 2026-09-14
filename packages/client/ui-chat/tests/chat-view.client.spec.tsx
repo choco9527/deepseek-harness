@@ -1325,6 +1325,65 @@ describe('ChatView', () => {
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
   })
 
+  it.each(['normal', 'compact'] as const)('keeps all prose in order and folds only tools regardless of %s', (mode) => {
+    const h = makeHarness({
+      nodes: [
+        user(1, 'question'), context(2, 'runtime policy', 1),
+        assistant(3, 'before tools', 1, 1), toolResult(4, 'a'),
+        assistant(5, 'between tools', 1, 2), toolResult(6, 'b', 'subagent'),
+        assistant(7, 'final answer', 1, 3),
+      ],
+      turnEnds: new Map([[1, 8]]),
+    })
+    h.setTranscriptView(mode)
+    const view = render(<h.ChatView {...h.props} toolsOnlyTranscript />)
+    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 个 subagent' })
+    expect(toggle.hasAttribute('data-turn-process-messages')).toBe(false)
+    const rows = [...view.container.querySelectorAll<HTMLElement>('[data-chat-flow-kind]')]
+    const visible = () => rows.filter(row => !row.hasAttribute('hidden')).map(row => row.dataset.chatFlowKind)
+    expect(visible()).toEqual(['user', 'turn-process', 'context', 'assistant-step', 'assistant-step', 'assistant-step', 'turn-tail'])
+    expect(rows.filter(row => row.hasAttribute('data-turn-process-member')).map(row => row.dataset.chatFlowKind))
+      .toEqual(['tool-call', 'tool-call'])
+    fireEvent.click(toggle)
+    expect(visible()).toEqual(['user', 'turn-process', 'context', 'assistant-step', 'tool-call', 'assistant-step', 'tool-call', 'assistant-step', 'turn-tail'])
+    fireEvent.click(toggle)
+    for (const text of ['before tools', 'between tools', 'final answer']) {
+      expect(view.getByText(text).closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
+    }
+    expect([...view.container.querySelectorAll('[data-chat-flow-kind]')]).toEqual(rows)
+  })
+
+  it('creates no tool disclosure for prose and reasoning alone', () => {
+    const final = { ...assistant(4, 'answer', 1, 2), blocks: [
+      { kind: 'reasoning' as const, text: 'analysis' }, { kind: 'text' as const, text: 'answer' },
+    ] }
+    const h = makeHarness({
+      nodes: [user(1, 'question'), assistant(2, 'earlier reply', 1, 1), final],
+      turnEnds: new Map([[1, 5]]),
+    })
+    const view = render(<h.ChatView {...h.props} toolsOnlyTranscript />)
+    expect(turnProcessControl(view.container)).toBeNull()
+    expect(view.container.querySelector('[data-turn-process-member]')).toBeNull()
+    expect(view.container.querySelector('[data-turn-process-inline][hidden]')).toBeNull()
+    expect(view.getByText('analysis')).toBeTruthy()
+    expect(view.getByText('earlier reply').closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
+  })
+
+  it('keeps tools visible while running or history is partial, then folds only tools', () => {
+    const nodes = [user(1, 'question'), assistant(2, 'working', 1, 1), toolResult(3, 'a')]
+    const h = makeHarness({ nodes, running: true })
+    const view = render(<h.ChatView {...h.props} toolsOnlyTranscript />)
+    expect(turnProcessControl(view.container)).toBeNull()
+    act(() => { h.set({ nodes: [...nodes, assistant(4, 'done', 1, 2)], running: false,
+      hasMore: true, turnEnds: new Map([[1, 5]]) }) })
+    expect(turnProcessControl(view.container)).toBeNull()
+    expect(view.container.querySelector('[data-turn-process-member]')).toBeNull()
+    act(() => { h.set({ hasMore: false }) })
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
+    expect(view.container.querySelector('[data-chat-flow-kind="tool-call"]')?.getAttribute('hidden')).toBe('until-found')
+    expect(view.getByText('working').closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
+  })
+
   it('folds Think and Tool rows before the final answer without unmounting them', () => {
     const first = {
       ...assistant(2, 'earlier reply', 1, 1),

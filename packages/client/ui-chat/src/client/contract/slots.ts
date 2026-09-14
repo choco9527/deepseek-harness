@@ -97,6 +97,8 @@ export interface ChatNodeOwnerProps {
 
 /** Shared presentation state for one Turn-process answer generation. */
 export interface TurnProcessOwnerProps {
+  /** Exclude messages and inline reasoning from the tool disclosure. */
+  readonly toolsOnly?: boolean
   readonly spec: TurnProcessSpec
   readonly foldable: boolean
   readonly open: boolean
@@ -128,6 +130,8 @@ export interface ChatScrollPosition {
 
 /** Business callbacks injected into the Chat view. */
 export interface ChatViewInjected {
+  /** Application-owned tool folding, independent of durable user preferences. */
+  toolsOnlyTranscript?: boolean
   hooks: {
     /** Persisted completed-Turn transcript presentation. */
     transcriptView: SnapshotStore<TranscriptViewMode>

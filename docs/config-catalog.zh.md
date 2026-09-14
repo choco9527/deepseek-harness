@@ -403,6 +403,20 @@ export interface Config {
 
 来源：[`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-chat"></a>
+
+## `@deepseek-ai/dsh-client-ui-chat`
+
+```ts config-catalog
+/** Presentation overrides supplied by the application, not user preferences. */
+export interface Config {
+  /** Keep messages visible, fold only completed-turn tools, and hide the mode selector. */
+  toolsOnlyTranscript?: boolean
+}
+```
+
+来源：[`packages/client/ui-chat/src/config.ts:5`](../packages/client/ui-chat/src/config.ts)
+
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-code-runtime-worker-thread`
@@ -3457,7 +3471,6 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-approval`（[`packages/client/ui-approval/src/index.ts`](../packages/client/ui-approval/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-attachment`（[`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-brand-official`（[`packages/client/ui-brand-official/src/index.ts`](../packages/client/ui-brand-official/src/index.ts)）
-- `@deepseek-ai/dsh-client-ui-chat` ([`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-commands`（[`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-conversation` ([`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-cordis`（[`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts)）

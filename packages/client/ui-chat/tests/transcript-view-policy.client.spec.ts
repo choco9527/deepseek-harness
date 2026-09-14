@@ -5,6 +5,17 @@ import type { ChatSettings } from '../src/chat-settings.ts'
 import { TranscriptViewPolicy } from '../src/client/transcript-view.ts'
 
 describe('TranscriptViewPolicy', () => {
+  it.each(['normal', 'compact'] as const)('ignores saved %s and later writes under application-owned tool folding', (mode) => {
+    const host = stubSettingsScope<ChatSettings>()
+    host.publish({ status: 'ready', value: { transcriptView: mode }, revision: 1, writable: true })
+    const policy = new TranscriptViewPolicy(host.scope, true)
+    policy.setMode('normal')
+    host.publish({ value: { transcriptView: 'normal' }, revision: 2 })
+    expect(policy.mode.getSnapshot()).toBe('compact')
+    expect(host.set).not.toHaveBeenCalled()
+    expect(host.scope.getSnapshot().value?.transcriptView).toBe('normal')
+  })
+
   it('defaults to Compact and publishes explicit choices before persistence settles', () => {
     const host = stubSettingsScope<ChatSettings>()
     const observed: string[] = []

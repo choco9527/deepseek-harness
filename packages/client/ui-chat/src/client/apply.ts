@@ -34,6 +34,7 @@ import { createChatStore } from './stores.ts'
 import { TranscriptViewPolicy } from './transcript-view.ts'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../chat-settings.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
+import { CHAT_PRESENTATION_GLOBAL, type Config, parseChatPresentation } from '../config.ts'
 
 const CHAT_NODE_INJECT: ChatNodeTurnDataInjected = {
   hooks: {
@@ -52,8 +53,13 @@ export const inject = [
 /**
  * Mount all Chat-owned contributions.
  * @param ctx - Client root context.
+ * @param config - application-owned transcript presentation.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: Config = {}): void {
+  const boot = parseChatPresentation(
+    (globalThis as typeof globalThis & { [CHAT_PRESENTATION_GLOBAL]?: unknown })[CHAT_PRESENTATION_GLOBAL],
+  )
+  const toolsOnlyTranscript = boot.toolsOnlyTranscript === true || config.toolsOnlyTranscript === true
   const chatSources = new WeakMap<SessionBinding, ObservableSnapshot<ChatSnapshot>>()
   const chatSource = (binding: SessionBinding): ObservableSnapshot<ChatSnapshot> => {
     let source = chatSources.get(binding)
@@ -80,9 +86,10 @@ export function apply(ctx: Context): void {
   const chatScrollPositions = new Map<SessionId, ChatScrollPosition>()
   const transcriptView = new TranscriptViewPolicy(
     ctx.settingsScope.bind<ChatSettings>({ namespace: CHAT_SETTINGS_NAMESPACE }),
+    toolsOnlyTranscript,
   )
 
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+  if (!toolsOnlyTranscript) ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'transcript-view',
     order: 12,
@@ -111,6 +118,7 @@ export function apply(ctx: Context): void {
         const session = binding.session
         const chat = chatSource(binding)
         return {
+          toolsOnlyTranscript,
           hooks: { transcriptView: transcriptView.mode },
           keyedHooks: {
             chatNode: key => chat.getSnapshot().nodes.source(key),
