@@ -82,7 +82,11 @@
 
 .annotationCard {
   position: absolute;
-  z-index: 2;
+  /* The summary chip sits at the tail of the transcript, right above the
+     composer, and this card opens upward over it. It has to clear the whole
+     composer stack: the sticky seat (7), the back-to-bottom control (8) and the
+     seat's lifted state while a trigger menu is open (9). */
+  z-index: 10;
   right: 0;
   bottom: calc(100% + 8px);
   box-sizing: border-box;

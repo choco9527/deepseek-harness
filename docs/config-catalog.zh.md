@@ -210,6 +210,8 @@ export interface Config {
 ```ts config-catalog
 /** Session Controller deployment policy. */
 export interface Config {
+  /** Use the live global model for every Session, ignoring last-used request routes. */
+  readonly followDefaultModel?: boolean
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
 }

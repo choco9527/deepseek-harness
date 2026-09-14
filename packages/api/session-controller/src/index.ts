@@ -70,6 +70,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** Session Controller deployment policy. */
 export interface Config {
+  /** Use the live global model for every Session, ignoring last-used request routes. */
+  readonly followDefaultModel?: boolean
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
 }
@@ -100,6 +102,7 @@ export class SessionController extends TypertRemoteService {
   ]
 
   static Config: z<Config> = z.object({
+    followDefaultModel: z.boolean(),
     nativeOpen: z.boolean(),
   })
 
@@ -122,7 +125,7 @@ export class SessionController extends TypertRemoteService {
     super(ctx, 'sessionController', { namespace: 'session' })
     installModelSelectionProjection(ctx)
     installPromptContexts(ctx)
-    this.agents = new ApiSessionAgentController(ctx)
+    this.agents = new ApiSessionAgentController(ctx, config.followDefaultModel)
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
       const result = await this.agents.resolveAgent(sessionId)

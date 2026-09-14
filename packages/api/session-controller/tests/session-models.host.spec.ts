@@ -158,6 +158,27 @@ function currentSelection(ctx: Context, sessionId: SessionId) {
 }
 
 describe('Web session model selection', () => {
+  it('follows live defaults for existing and resumed sessions without rewriting history or an assembled request', async () => {
+    const { ctx, agent } = await harness({ provider: 'removed-provider', model: 'removed-model' })
+    let stored = { provider: 'deepseek-official', model: 'deepseek-chat', reasoningEffort: ReasoningEffortId('off') }
+    createSessionTestRemote(ctx, { defaultModelSelection: () => stored, cwd: '/tmp' })
+    const before = agent.session.snapshotEvents()
+    const selected = new ApiSessionAgentController(ctx, true).selectionFor(agent)
+    expect(selected.current).toEqual(stored)
+    await ctx.systemPrompt.assemble()
+    const assembled = selected.assembled
+    stored = { provider: 'duplicate', model: 'same', reasoningEffort: ReasoningEffortId('high') }
+    expect(selected.current).toEqual(stored)
+    expect(selected.assembled).toEqual(assembled)
+    const signal = new AbortController().signal
+    await expect(agentEvents(ctx, agent).waterfall('agent/request', { turn: 1, step: 1, signal },
+      () => Promise.resolve({ provider: 'seed', model: 'seed' }))).resolves.toMatchObject(assembled!)
+    await ctx.systemPrompt.assemble()
+    expect(selected.assembled).toEqual(stored)
+    expect(new ApiSessionAgentController(ctx, true).selectionFor(agent).current).toEqual(stored)
+    expect(agent.session.snapshotEvents()).toEqual(before)
+    await ctx.fiber.dispose()
+  })
   it('validates an ordered image batch before persisting any member', async () => {
     const { ctx, agent, sessionId } = await harness()
     const validateImage = vi.fn((_input: { data: Uint8Array }) => Promise.resolve())

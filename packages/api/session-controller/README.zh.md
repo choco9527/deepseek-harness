@@ -50,6 +50,9 @@ Session 对象还承载本地提交回显：`session.beginSubmission` 在调用�
 | 字段 | 默认值 | 含义 |
 |---|---:|---|
 | `nativeOpen` | 平台探测 | 是否能把 Session 工作区路径交给原生桌面打开器 |
+| `followDefaultModel` | `false` | 所有 Session 使用实时全局默认值，而不是上次使用或待处理的模型 |
+
+跟随全局默认时，会在提示词组装阶段捕获提供方、模型和推理强度。保存设置会影响下一次组装，包括恢复的 Session；不会改写历史或改变已组装的请求。启用此策略的产品必须隐藏会话级模型选择器。路由切换沿用已有的持久模型切换提示。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-api-session-controller)是所有受支持字段及其 JSDoc 的完整来源。
 

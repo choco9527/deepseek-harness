@@ -16,6 +16,10 @@ Routes from the same provider use model ids; cross-provider routes use `provider
 
 The accepted message is logged through the existing `user/message` event before the request header and therefore appears in model input, Chat, and Trajectory. The request header remains the durable record that the new route was used. If a step fails before that header is logged, the next request step repeats the notice because the durable previous route remains unchanged.
 
+### Global-only product settings
+
+The Session Controller's opt-in `followDefaultModel` policy reads the live default at assembly for both new and resumed Sessions. BBA exposes only global model settings, so a last-used route is not user intent to pin a conversation. Existing headers and selection events remain intact; the next request records its effective route through the same notice and header path. The default Session Controller policy remains session-local. The controller's focused tests verify changed defaults, unchanged historical events, and stable already-assembled requests.
+
 ## Alternatives considered
 
 **Put the notice in the system prompt.** A transient prompt change would not be reconstructable from the session log and would not mark the exact point where ownership of assistant turns changed.
@@ -23,6 +27,8 @@ The accepted message is logged through the existing `user/message` event before 
 **Create a separate package or capability.** The behavior only coordinates the prompt snapshot and request route already owned by `installModelSelection`; it has no independent service, provider, or consumer roles.
 
 **Show the change only in the client.** Client-only presentation would leave the newly selected model without the fact needed to interpret earlier assistant turns.
+
+**Require a conversation picker in a global-only product.** This adds an unsupported user workflow. Such products opt into global following instead of migrating or deleting conversation history.
 
 ## Consequences
 

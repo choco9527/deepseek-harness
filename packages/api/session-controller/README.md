@@ -50,6 +50,9 @@ The Session object also carries local submission echoes: `session.beginSubmissio
 | Field | Default | Meaning |
 |---|---:|---|
 | `nativeOpen` | platform-detected | Whether Session workspace paths can be handed to a native desktop opener |
+| `followDefaultModel` | `false` | Use the live global default for every Session instead of its last-used or pending model |
+
+Global-default following captures provider, model, and reasoning effort at prompt assembly. Saving settings affects the next assembly, including resumed Sessions; it does not rewrite history or change an already assembled request. Products enabling this policy must hide Session-local model selectors. Route changes use the existing logged model-switch notice.
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-session-controller) is the exhaustive source for accepted fields and their JSDoc.
 
