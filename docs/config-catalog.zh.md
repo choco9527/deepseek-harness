@@ -3456,6 +3456,30 @@ export interface Config {
 
 来源：[`packages/workflow/workflow-worker-thread/src/index.ts:32`](../packages/workflow/workflow-worker-thread/src/index.ts)
 
+<a id="deepseek-aidsh-workspace"></a>
+
+## `@deepseek-ai/dsh-workspace`
+
+需要：`storageDomain` · `sessionPersistence`
+
+```ts config-catalog
+/** Startup-only metadata relocations; no filesystem copying or session-log rewriting. */
+export interface Config {
+  /** Explicit relocations to reconcile before validating session membership; absent means none. */
+  readonly pathRelocations?: readonly WorkspacePathRelocation[]
+}
+
+/** Host-owned physical relocation completed before the workspace service starts. */
+export interface WorkspacePathRelocation {
+  /** Stored canonical root spelling, including descendants; must still resolve through a retained filesystem alias. */
+  readonly from: string
+  /** Existing destination; both spellings must resolve to this same directory. */
+  readonly to: string
+}
+```
+
+来源：[`packages/workspace/workspace/src/types.ts:27`](../packages/workspace/workspace/src/types.ts)
+
 ## 无配置的可加载插件
 
 这些插件通过 `cordis.yml` 中不含 `config:` 块的条目加载；它们未声明任何配置接口。
@@ -3541,7 +3565,6 @@ export interface Config {
 - `@deepseek-ai/dsh-tool-subagent-control` — 需要 `tools` · `subagents`（[`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)）
 - `@deepseek-ai/dsh-user-questions`（[`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-webhook` — 需要 `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry`（[`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts)）
-- `@deepseek-ai/dsh-workspace` — 需要 `storageDomain` · `sessionPersistence`（[`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts)）
 
 ## Seam 包（不可直接加载）
 

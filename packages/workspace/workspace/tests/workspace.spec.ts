@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -31,6 +31,7 @@ const header = (id: string, cwd?: string, createdAt = 0): SessionHeader => ({
 })
 
 interface HarnessOptions {
+  pathRelocations?: Array<{ from: string; to: string }>
   pool?: MemoryMediaPool
   sessions?: SessionHeader[]
   liveSessions?: SessionHeader[]
@@ -67,7 +68,7 @@ async function harness(options: HarnessOptions = {}) {
 
   const changes: DomainChanged[] = []
   ctx.on('domain/changed', (change) => { changes.push(change) })
-  const fiber = await ctx.plugin(WorkspaceRegistry)
+  const fiber = await ctx.plugin(WorkspaceRegistry, { pathRelocations: options.pathRelocations ?? [] })
   const initChanges = [...changes]
   changes.length = 0
   return {
@@ -189,6 +190,132 @@ afterEach(async () => {
 })
 
 describe('WorkspaceRegistry lifecycle and bootstrap', () => {
+  it('relocates nested workspaces through the most specific physical mapping', async () => {
+    const from = await makeDir('legacy-parent')
+    const nested = join(from, 'project')
+    const specific = join(from, 'deliveries')
+    await mkdir(nested)
+    await mkdir(specific)
+    const to = join(base, 'new-parent')
+    const outputs = join(base, 'outputs')
+    const pool = storedPool([
+      ['root', record(from, ['root-session'])], ['nested', record(nested, ['nested-session'])],
+      ['specific', record(specific, ['specific-session'])],
+    ], { initialized: true, workspaceIds: ['root', 'nested', 'specific'].map(WorkspaceId) })
+    await rename(specific, outputs)
+    await symlink(outputs, specific, process.platform === 'win32' ? 'junction' : 'dir')
+    await rename(from, to)
+    await symlink(to, from, process.platform === 'win32' ? 'junction' : 'dir')
+    const result = await harness({ pool,
+      sessions: [header('root-session', from), header('nested-session', nested), header('specific-session', specific)],
+      pathRelocations: [{ from, to }, { from: specific, to: outputs }],
+    })
+    try {
+      expect(result.registry.list().map(workspace => [workspace.path, workspace.sessionIds])).toEqual([
+        [to, ['root-session']], [join(to, 'project'), ['nested-session']], [outputs, ['specific-session']],
+      ])
+    } finally { await result.ctx.fiber.dispose() }
+  })
+
+  it('rejects an unverified relocation without changing the stored record', async () => {
+    const from = await makeDir('still-present')
+    const to = await makeDir('different-content')
+    const before = record(from, ['session'])
+    const pool = storedPool([['id', before]], { initialized: true, workspaceIds: [WorkspaceId('id')] })
+    const ctx = await storageContext(pool)
+    ctx.provide('sessionPersistence', { list: async () => [] } as never)
+    try {
+      await expect(ctx.plugin(WorkspaceRegistry, { pathRelocations: [{ from, to }] })).rejects.toThrow('must resolve')
+      expect(storedRecord(pool, 'id')).toEqual(before)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rejects path collisions before any record is rewritten', async () => {
+    const from = await makeDir('collision-source')
+    const to = join(base, 'collision-target')
+    const before = record(from, ['session'])
+    const pool = storedPool([['old', before], ['existing', record(to, [])]], {
+      initialized: true, workspaceIds: ['old', 'existing'].map(WorkspaceId),
+    })
+    await rename(from, to)
+    await symlink(to, from, process.platform === 'win32' ? 'junction' : 'dir')
+    const ctx = await storageContext(pool)
+    ctx.provide('sessionPersistence', { list: async () => [] } as never)
+    try {
+      await expect(ctx.plugin(WorkspaceRegistry, { pathRelocations: [{ from, to }] })).rejects.toThrow('merge distinct')
+      expect(storedRecord(pool, 'old')).toEqual(before)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('resumes a partially committed metadata relocation without pruning sessions', async () => {
+    const from = await makeDir('interrupted-root')
+    const nested = join(from, 'nested')
+    await mkdir(nested)
+    const to = join(base, 'interrupted-target')
+    const pool = storedPool([['root', record(from, ['first'])], ['nested', record(nested, ['second'])]], {
+      initialized: true, workspaceIds: ['root', 'nested'].map(WorkspaceId),
+    })
+    await rename(from, to)
+    await symlink(to, from, process.platform === 'win32' ? 'junction' : 'dir')
+    const ctx = await storageContext(pool, selectiveFailureBackend(pool, { putAt: 2 }))
+    ctx.provide('sessionPersistence', { list: async () => [] } as never)
+    try {
+      await expect(ctx.plugin(WorkspaceRegistry, { pathRelocations: [{ from, to }] })).rejects.toThrow('selected bootstrap put failure')
+      expect(storedRecord(pool, 'root').path).toBe(to)
+      expect(storedRecord(pool, 'nested').path).toBe(nested)
+    } finally { await ctx.fiber.dispose() }
+    const recovered = await harness({ pool, sessions: [header('first', from), header('second', nested)],
+      pathRelocations: [{ from, to }],
+    })
+    try {
+      expect(recovered.registry.list().map(workspace => workspace.sessionIds)).toEqual([['first'], ['second']])
+      expect(storedRecord(pool, 'nested').path).toBe(join(to, 'nested'))
+    } finally { await recovered.ctx.fiber.dispose() }
+  })
+
+  it('retains workspace identity, archive state and session order after an explicit physical relocation', async () => {
+    const from = await makeDir('legacy-workspace')
+    const to = join(base, 'relocated-workspace')
+    const before = record(from, ['newer', 'older'])
+    const pool = storedPool([['stable-id', before]], {
+      initialized: true, workspaceIds: [WorkspaceId('stable-id')], archivedSessionIds: [SessionId('older')],
+    })
+    await rename(from, to)
+    await symlink(to, from, process.platform === 'win32' ? 'junction' : 'dir')
+    const sessions = [header('older', from), header('newer', from)]
+    const first = await harness({ pool, sessions, pathRelocations: [{ from, to }] })
+    try {
+      const workspace = first.registry.get(WorkspaceId('stable-id'))!
+      expect(workspace.path).toBe(to)
+      expect(workspace.sessionIds).toEqual(['newer', 'older'])
+      expect(workspace.createdAt).toBe(before.createdAt)
+      expect(storedState(pool).archivedSessionIds).toEqual(['older'])
+      expect(first.open).not.toHaveBeenCalled()
+      expect(sessions.every(session => session.cwd === from)).toBe(true)
+      await workspace.setTitle('Argo')
+      expect(storedRecord(pool, 'stable-id').sessionIds).toEqual(['newer', 'older'])
+    } finally { await first.ctx.fiber.dispose() }
+    const second = await harness({ pool, sessions, pathRelocations: [{ from, to }] })
+    try {
+      expect(second.registry.list()).toHaveLength(1)
+      expect(second.registry.get(WorkspaceId('stable-id'))?.sessionIds).toEqual(['newer', 'older'])
+      expect(second.initChanges.filter(change => change.table === 'workspaces')).toEqual([])
+    } finally { await second.ctx.fiber.dispose() }
+  })
+
+  it('does not relocate records merely because a directory became a link', async () => {
+    const from = await makeDir('unconfigured-legacy')
+    const to = join(base, 'unconfigured-new')
+    const pool = storedPool([['id', record(from, ['session'])]], { initialized: true, workspaceIds: [WorkspaceId('id')] })
+    await rename(from, to)
+    await symlink(to, from, process.platform === 'win32' ? 'junction' : 'dir')
+    const result = await harness({ pool, sessions: [header('session', from)] })
+    try {
+      expect(result.registry.get(WorkspaceId('id'))?.path).toBe(from)
+      expect(result.registry.get(WorkspaceId('id'))?.sessionIds).toEqual([])
+    } finally { await result.ctx.fiber.dispose() }
+  })
+
   it('stays pending without sessionPersistence and never opens or marks the domain', async () => {
     const pool = new MemoryMediaPool()
     const ctx = await storageContext(pool)

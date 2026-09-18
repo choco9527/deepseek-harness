@@ -33,7 +33,7 @@ Use it when the product shows a persistent workspace surface — a sidebar, sess
 
 ### Setting up
 
-The package takes no configuration of its own; it needs a session store, a session persistence backend, and the storage rows that keep its records. A minimal composition:
+The package needs a session store, a session persistence backend, and the storage rows that keep its records. Configuration is optional. A minimal composition:
 
 ```yaml
 - name: '@deepseek-ai/dsh-session'
@@ -49,6 +49,8 @@ The package takes no configuration of its own; it needs a session store, a sessi
 With these rows mounted, creating a project shows up in the list immediately and survives a restart; the first start also groups existing sessions by the directory they ran in. If a required peer is missing, the workspace feature stays unavailable until it is mounted.
 
 ### Creating and ordering projects
+
+The optional `pathRelocations` configuration accepts `{ from, to }` directory pairs prepared by the host before startup. Both fully qualified paths must resolve to the same existing directory through a retained filesystem alias. The registry updates matching records, including descendants, before indexing session headers; IDs, order, archive state, and session logs stay unchanged. Duplicate sources, invalid directories, and resulting path collisions reject activation before relocation writes. The host owns process exclusion, file copying, and aliases; the registry never discovers or moves directories. See the [relocation decision](../../../.agents/notes/implemented/architecture/2026-09-18-workspace-path-relocation.md) and [configuration catalog](../../../docs/config-catalog.md).
 
 Create a project from any fully qualified directory that exists: filesystem roots such as `C:\` and ordinary directories are valid. Relative paths, Windows drive-relative paths such as `C:work`, missing paths, and files are rejected without creating a project; creating a project for a directory that already has one returns the existing project unchanged. Rename a project at any time, and move it to any position in the list:
 

@@ -3454,6 +3454,30 @@ export interface Config {
 
 Source: [`packages/workflow/workflow-worker-thread/src/index.ts:32`](../packages/workflow/workflow-worker-thread/src/index.ts)
 
+<a id="deepseek-aidsh-workspace"></a>
+
+## `@deepseek-ai/dsh-workspace`
+
+Requires: `storageDomain` · `sessionPersistence`
+
+```ts config-catalog
+/** Startup-only metadata relocations; no filesystem copying or session-log rewriting. */
+export interface Config {
+  /** Explicit relocations to reconcile before validating session membership; absent means none. */
+  readonly pathRelocations?: readonly WorkspacePathRelocation[]
+}
+
+/** Host-owned physical relocation completed before the workspace service starts. */
+export interface WorkspacePathRelocation {
+  /** Stored canonical root spelling, including descendants; must still resolve through a retained filesystem alias. */
+  readonly from: string
+  /** Existing destination; both spellings must resolve to this same directory. */
+  readonly to: string
+}
+```
+
+Source: [`packages/workspace/workspace/src/types.ts:27`](../packages/workspace/workspace/src/types.ts)
+
 ## Loadable plugins with no config
 
 These load from a `cordis.yml` entry with no `config:` block; they declare no configuration API.
@@ -3539,7 +3563,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-tool-subagent-control` — requires `tools` · `subagents` ([`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts))
 - `@deepseek-ai/dsh-user-questions` ([`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts))
 - `@deepseek-ai/dsh-webhook` — requires `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` ([`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts))
-- `@deepseek-ai/dsh-workspace` — requires `storageDomain` · `sessionPersistence` ([`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts))
 
 ## Seam packages (not directly loadable)
 

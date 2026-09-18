@@ -17,6 +17,8 @@ host 侧唯一的持久化面是 session 事件日志（`packages/session/sessio
 
 ## 方案
 
+宿主显式完成的目录移动遵循[启动路径迁移决策](../../implemented/architecture/2026-09-18-workspace-path-relocation.zh.md)；这不替代下文的存储或会话账本设计。
+
 新建 `packages/storage/` 组——`ctx.storage` 存储枢纽（后端注册面 + 数据形式挂载面）、两个后端、domain 领域数据形式——及 workspace 消费方包；给 `SessionPersistence` 扩删除原语。
 
 | 包 | 路径 | ctx 面 | 本期 |

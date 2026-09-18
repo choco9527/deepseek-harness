@@ -15,6 +15,20 @@ import type {} from '@deepseek-ai/dsh-typert-protocol'
  */
 export type WorkspaceId = Branded<'WorkspaceId'>
 
+/** Host-owned physical relocation completed before the workspace service starts. */
+export interface WorkspacePathRelocation {
+  /** Stored canonical root spelling, including descendants; must still resolve through a retained filesystem alias. */
+  readonly from: string
+  /** Existing destination; both spellings must resolve to this same directory. */
+  readonly to: string
+}
+
+/** Startup-only metadata relocations; no filesystem copying or session-log rewriting. */
+export interface Config {
+  /** Explicit relocations to reconcile before validating session membership; absent means none. */
+  readonly pathRelocations?: readonly WorkspacePathRelocation[]
+}
+
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /** No registration carries that Workspace identity. */
@@ -34,8 +48,9 @@ export interface Workspace {
 
   /**
    * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
-   * afterwards, even when the directory disappears (see {@link status}).
+   * time (trailing slashes, `..`, and symlinks all resolved). Only explicitly
+   * configured startup relocations may update it after the host moves the
+   * directory and retains an alias. A missing directory never rewrites it.
    */
   readonly path: string
 

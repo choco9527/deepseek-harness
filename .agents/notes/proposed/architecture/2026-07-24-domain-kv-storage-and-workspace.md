@@ -17,6 +17,8 @@ The later [Workspace registration deletion decision](../../implemented/feature/2
 
 ## Proposal
 
+Explicit host-completed directory moves use the [startup path-relocation decision](../../implemented/architecture/2026-09-18-workspace-path-relocation.md); this does not replace the storage or session-account design below.
+
 Create the `packages/storage/` group — the `ctx.storage` hub (backend registry + data-form mounts), two backends, the domain data form — plus the workspace consumer package; extend `SessionPersistence` with a delete primitive.
 
 | Package | Path | ctx surface | This phase |
