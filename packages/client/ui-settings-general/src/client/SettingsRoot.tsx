@@ -32,6 +32,7 @@ function navIcon(id: string) {
 }
 
 type PanelProps = {
+  open: boolean
   rows: readonly SettingsSectionRow[]
   renderSlot: SettingsRootComponentProps['renderSlot']
   activeId: string | undefined
@@ -41,29 +42,30 @@ type PanelProps = {
 
 /**
  * The modal layer: full-viewport mask + centered panel. Close paths: the
- * header button, a mask click, and document-level Escape (mounted only while
- * open, so the listener lifetime is the panel's).
+ * header button, a mask click, and document-level Escape while open.
  */
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
+function SettingsPanel({ open, rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
   const titleId = useId()
 
   useEffect(() => {
+    if (!open) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => { document.removeEventListener('keydown', onKeyDown) }
-  }, [onClose])
+  }, [open, onClose])
 
   // Entering the dialog focuses the close button; the root restores its trigger on close.
   const closeButton = useRef<HTMLButtonElement | null>(null)
-  useEffect(() => { closeButton.current?.focus() }, [])
+  useEffect(() => { if (open) closeButton.current?.focus() }, [open])
 
   return (
-    <div className={css.overlay} role="presentation">
+    <div className={css.overlay} role="presentation" data-state={open ? 'open' : 'closed'}
+      ref={(node) => { node?.toggleAttribute('inert', !open) }} aria-hidden={!open || undefined}>
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <nav className={css.nav}>
@@ -110,6 +112,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
     wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t,
   } = props
   const [open, setOpen] = useState(false)
+  const [retained, setRetained] = useState(false)
   const [activeId, setActiveId] = useState<string | undefined>(undefined)
   const [completedOnboarding, setCompletedOnboarding] = useState<ReadonlySet<string>>(() => new Set())
   const [showRecovery, setShowRecovery] = useState(false)
@@ -117,8 +120,15 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   const wasOpen = useRef(open)
   const close = useCallback(() => {
     setOpen(false)
-    setActiveId(undefined)
   }, [])
+  useEffect(() => {
+    if (open) { setRetained(true); return }
+    if (!retained) return
+    const remove = () => { setRetained(false); setActiveId(undefined) }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { remove(); return }
+    const timeout = window.setTimeout(remove, 100)
+    return () => { window.clearTimeout(timeout) }
+  }, [open, retained])
   // Restore after the close commit, when the dialog can no longer own focus.
   useEffect(() => {
     if (wasOpen.current && !open) triggerButton.current?.focus()
@@ -202,8 +212,9 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           onReconnect={reconnect}
         />
       </div>
-      {open && (
+      {(open || retained) && (
         <SettingsPanel
+          open={open}
           rows={rows}
           renderSlot={renderSlot}
           activeId={activeId}

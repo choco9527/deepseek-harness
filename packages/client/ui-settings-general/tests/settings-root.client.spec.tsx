@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useEffect, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -12,8 +12,10 @@ import { en, zh } from '../src/client/locales.ts'
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
 const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
 
+beforeEach(() => { vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false }))) })
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
@@ -208,6 +210,52 @@ describe('SettingsPanel chrome seats', () => {
 })
 
 describe('SettingsPanel close paths', () => {
+  it('retains a non-interactive selected section for exit, then removes it', () => {
+    vi.useFakeTimers()
+    mount()
+    openPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(dialog.isConnected).toBe(true)
+    expect(dialog.parentElement!.hasAttribute('inert')).toBe(true)
+    expect(dialog.parentElement!.getAttribute('data-state')).toBe('closed')
+    expect(screen.getByTestId('section-models')).toBeTruthy()
+    act(() => { vi.advanceTimersByTime(100) })
+    expect(dialog.isConnected).toBe(false)
+    openPanel()
+    expect(screen.getByTestId('section-general')).toBeTruthy()
+  })
+
+  it('cancels a pending exit when reopened and clears its timer on unmount', () => {
+    vi.useFakeTimers()
+    const { view } = mount()
+    const trigger = openPanel()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    act(() => { vi.advanceTimersByTime(50) })
+    fireEvent.click(trigger)
+    act(() => { vi.advanceTimersByTime(100) })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+    const schedule = vi.spyOn(window, 'setTimeout')
+    const cancel = vi.spyOn(window, 'clearTimeout')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    const exitTimer: unknown = schedule.mock.results[schedule.mock.calls.findIndex(([, delay]) => delay === 100)]!.value
+    view.unmount()
+    expect(cancel).toHaveBeenCalledWith(exitTimer)
+    schedule.mockRestore()
+    cancel.mockRestore()
+  })
+
+  it('removes the dialog immediately when reduced motion is requested', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    mount()
+    openPanel()
+    const dialog = screen.getByRole('dialog')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(dialog.isConnected).toBe(false)
+  })
+
   it('closes via the header button and restores trigger focus', async () => {
     mount()
     const trigger = openPanel()

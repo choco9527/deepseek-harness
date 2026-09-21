@@ -72,6 +72,26 @@
   inset: 0;
   background: var(--dsw-alias-bg-mask-1);
   backdrop-filter: var(--dsw-mask-blur);
+  animation: maskEnter 180ms ease-out both;
+}
+
+.overlay[data-state='closed'] { pointer-events: none; }
+.overlay[data-state='closed'] .mask { animation: maskExit 100ms ease-in both; }
+.overlay[data-state='closed'] .panel { animation: panelExit 100ms ease-in both; }
+
+@keyframes maskEnter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes maskExit { from { opacity: 1; } to { opacity: 0; } }
+@keyframes panelEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes panelExit {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay[data-state] .mask, .overlay[data-state] .panel { animation: none; }
 }
 
 /* Panel (figma Settings 501:29947): r24, white; the figma lv3 effects are
@@ -81,6 +101,7 @@
    composition editor), and a content-sized panel would resize under the
    pointer on every nav click. Whatever does not fit scrolls in `.options`. */
 .panel {
+  animation: panelEnter 180ms cubic-bezier(.2, .8, .2, 1) both;
   position: relative;
   z-index: 1;
   display: flex;
