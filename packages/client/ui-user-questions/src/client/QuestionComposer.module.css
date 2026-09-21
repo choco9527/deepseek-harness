@@ -162,6 +162,60 @@
   padding: 4px 12px;
 }
 
+.optionRow {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.quickAction {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  background: var(--dsw-alias-bg-overlay);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.optionRow:hover .quickAction,
+.optionRow:focus-within .quickAction {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.quickAction:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.quickAction:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.quickAction:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-dimmed);
+}
+
+@media (hover: none) {
+  .quickAction {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .option {
   display: flex;
   /* flex-start, not center: with a wrapped description the indicator must
@@ -187,7 +241,7 @@
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.option:hover:not(:disabled),
+.optionRow:hover .option:not(:disabled),
 .optionSelected {
   background: var(--dsw-alias-interactive-bg-hover);
 }
@@ -198,6 +252,10 @@
 
 .option:disabled {
   cursor: default;
+}
+
+.option.optionWithAction {
+  padding-right: 76px;
 }
 
 /* Leading indicator (figma 20×20, radius 6): single-select shows the option

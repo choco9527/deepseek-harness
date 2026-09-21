@@ -309,6 +309,53 @@ describe('web e2e: resident question composer round trip', () => {
     expect(tripwire.warnings).toEqual([])
   }, 200_000)
 
+  it.skipIf(MODE === 'record')('auto-advances early choices and submits with the final inline button', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-question-arrow'))
+    const agent = scaffold.ctx.agents.get(answeredSession as SessionId)
+    expect(agent).toBeDefined()
+    const asked = scaffold.ctx.userQuestions.ask({
+      agent: agent as NonNullable<typeof agent>,
+      questions: [
+        { id: 'start', question: 'Start here', options: [{ label: 'Continue' }] },
+        { id: 'choice', question: 'Choose an approach', options: [{ label: 'First' }, { label: 'Second' }] },
+      ],
+    })
+    const composer = page.locator('[data-question-key]')
+    await composer.waitFor({ timeout: 30_000 })
+    expect(await composer.getByRole('button', { name: /Select and submit:/ }).count()).toBe(0)
+    await composer.getByRole('radio', { name: 'Continue', exact: true }).click()
+    const option = composer.getByRole('radio', { name: 'Second', exact: true })
+    const arrow = composer.getByRole('button', { name: 'Select and submit: Second', exact: true })
+    await page.mouse.move(0, 0)
+    expect(await arrow.evaluate(el => getComputedStyle(el).opacity)).toBe('0')
+    const before = await option.boundingBox()
+    await option.hover()
+    expect(await arrow.evaluate(el => getComputedStyle(el).opacity)).toBe('1')
+    expect(await option.boundingBox()).toEqual(before)
+    expect(await arrow.textContent()).toBe('Submit')
+    expect(await arrow.locator('svg').count()).toBe(0)
+    expect(await arrow.evaluate((el) => {
+      const rect = el.getBoundingClientRect()
+      const style = getComputedStyle(el)
+      return { fits: rect.width >= 44, height: rect.height, radius: style.borderRadius }
+    })).toEqual({ fits: true, height: 28, radius: '6px' })
+    await option.click()
+    expect(await option.getAttribute('aria-checked')).toBe('true')
+    expect(await composer.count()).toBe(1)
+    await page.mouse.move(0, 0)
+    await option.press('Tab')
+    expect(await arrow.evaluate(el => document.activeElement === el && getComputedStyle(el).opacity === '1')).toBe(true)
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/question-option-arrow.md', import.meta.url)),
+      await captureStableAria(page, '[data-question-key]', scaffold.workspaceCwd), MODE,
+    )
+    await arrow.press('Enter')
+    expect(await asked).toEqual({ answers: [
+      { id: 'start', selected: ['Continue'] }, { id: 'choice', selected: ['Second'] },
+    ] })
+    await expect.poll(() => composer.count(), { timeout: 10_000 }).toBe(0)
+  }, 60_000)
+
   // The fixture's question carries options, so the round trip above only ever
   // exercises the inline shape. The optionless shape is the one that carries
   // padding, which is where a cap measured in box pixels drifts off the line

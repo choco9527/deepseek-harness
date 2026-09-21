@@ -176,12 +176,69 @@ function wait(questions: PendingQuestion['questions'] = QUESTIONS) {
 const answerBatch = (answers: object[]) => ({ answers })
 
 describe('QuestionComposer', () => {
+  it('submits the inline submit choice instead of the previous selection, once', () => {
+    const { carrier, answer } = wait([QUESTIONS[0]!])
+    answer.mockImplementation(() => new Promise(() => {}))
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    fireEvent.click(screen.getByRole('radio', { name: '工程落地型' }))
+    expect(answer).not.toHaveBeenCalled()
+    const arrow = screen.getByRole<HTMLButtonElement>('button', { name: '选择并提交: 研究潜力型' })
+    expect(arrow.closest('[role="radio"]')).toBeNull()
+    expect(arrow.title).toBe('选择并提交')
+    expect(arrow.textContent).toBe('提交')
+    expect(arrow.querySelector('svg')).toBeNull()
+    fireEvent.click(arrow)
+    fireEvent.click(arrow)
+    expect(answer).toHaveBeenCalledExactlyOnceWith(answerBatch([
+      { id: 'profile', selected: ['研究潜力型'] },
+    ]))
+    expect(arrow.disabled).toBe(true)
+  })
+
+  it('returns to an unanswered question instead of submitting an incomplete batch', () => {
+    const { carrier, answer } = wait([QUESTIONS[0]!, { id: 'last', question: '最后一题', options: [{ label: '完成' }] }])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    fireEvent.click(screen.getByLabelText('下一题'))
+    fireEvent.click(screen.getByRole('button', { name: '选择并提交: 完成' }))
+    expect(answer).not.toHaveBeenCalled()
+    expect(screen.getByText('1 / 2')).toBeTruthy()
+    fireEvent.click(screen.getByRole('radio', { name: '研究潜力型' }))
+    expect(screen.getByRole('radio', { name: '完成' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '选择并提交: 完成' }))
+    expect(answer).toHaveBeenCalledExactlyOnceWith(answerBatch([
+      { id: 'profile', selected: ['研究潜力型'] }, { id: 'last', selected: ['完成'] },
+    ]))
+  })
+
+  it('keeps the selected inline answer after a send failure and allows retry', async () => {
+    const { carrier, answer } = wait([QUESTIONS[0]!])
+    answer.mockRejectedValueOnce(new Error('发送失败'))
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    fireEvent.change(screen.getByPlaceholderText('输入你的答案'), { target: { value: '旧的自定义答案' } })
+    fireEvent.click(screen.getByRole('button', { name: '选择并提交: 研究潜力型' }))
+    expect(await screen.findByText('发送失败')).toBeTruthy()
+    expect(screen.getByRole('radio', { name: '研究潜力型' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '选择并提交: 研究潜力型' }))
+    expect(answer).toHaveBeenCalledTimes(2)
+    expect(answer).toHaveBeenLastCalledWith(answerBatch([{ id: 'profile', selected: ['研究潜力型'] }]))
+  })
+
+  it('localizes inline actions and omits them for multiple choice', () => {
+    const { carrier } = wait([QUESTIONS[0]!])
+    const view = render(<QuestionComposer matched={carrier} {...kit} t={seatOver(en, commonEn)} />)
+    expect(screen.getByRole('button', { name: 'Select and submit: 研究潜力型' }).title).toBe('Select and submit')
+    const multi = wait([QUESTIONS[2]!])
+    view.rerender(<QuestionComposer matched={multi.carrier} {...kit} />)
+    expect(screen.queryByRole('button', { name: /选择并/ })).toBeNull()
+  })
+
   it('collects single, custom, and multi-select answers before one batch submit', () => {
     const { carrier, answer } = wait()
     render(<QuestionComposer matched={carrier} {...kit} />)
 
     expect(screen.getByText('偏好')).toBeTruthy()
     expect(screen.getByText('1 / 3')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /选择并提交/ })).toBeNull()
     expect(screen.getByText('推荐')).toBeTruthy()
     expect(screen.getByText('工程落地型')).toBeTruthy()
     const detail = screen.getByText('按当前空缺岗位的优先级选择。')
@@ -192,7 +249,7 @@ describe('QuestionComposer', () => {
     fireEvent.keyDown(screen.getByRole('radio', { name: /工程落地型/ }), { key: 'Enter' })
     expect(answer).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('radio', { name: /工程落地型/ }))
-
+    expect(answer).not.toHaveBeenCalled()
     expect(screen.getByText('2 / 3')).toBeTruthy()
     // detail is per-question: the second question carries none.
     expect(screen.queryByText('按当前空缺岗位的优先级选择。')).toBeNull()
@@ -457,8 +514,6 @@ describe('PendingQuestion domain face', () => {
     const { carrier, answer } = wait()
     render(<QuestionComposer matched={carrier} {...kit} />)
     fireEvent.click(screen.getByRole('radio', { name: /工程落地型/ }))
-    // Single-select auto-advances to the second question; collapse and expand
-    // must not lose either the picked option or the current position.
     fireEvent.click(screen.getByLabelText(zh['nav.minimize']))
     fireEvent.click(screen.getByLabelText(zh['nav.maximize']))
     const custom = screen.getByPlaceholderText(zh['custom.placeholder'])

@@ -146,6 +146,7 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
   ))
   const { index, drafts } = storedProgress ?? initialProgress
   const [busy, setBusy] = useState<'answer' | 'cancel' | null>(null)
+  const settling = useRef(false)
   const [error, setError] = useState<Feedback | null>(null)
   // Collapsed to the header strip so the conversation above stays readable
   // while the user decides; answer drafts live in the Session store above.
@@ -160,17 +161,21 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
+  const canQuickSubmit = question.multiSelect !== true && index === questions.length - 1
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
     actions.replace(pending.key, { index: nextIndex, drafts: nextDrafts })
   }
 
   const cancelFlow = (): void => {
+    if (settling.current) return
+    settling.current = true
     setBusy('cancel')
     setError(null)
     void pending.cancel()
       .then(() => { actions.clear(pending.key) })
       .catch((cause: unknown) => {
+        settling.current = false
         setBusy(null)
         setError({ text: cause instanceof Error ? cause.message : String(cause) })
       })
@@ -203,6 +208,7 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
   const completed = (item: QuestionDraftAnswer): boolean => answered(item) || item.skipped
 
   const submitDrafts = (values: QuestionDraftAnswer[]): void => {
+    if (settling.current) return
     const missing = values.findIndex(item => !completed(item))
     if (missing >= 0) {
       replaceProgress(missing, values)
@@ -221,14 +227,26 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
         }
       }),
     }
+    settling.current = true
     setBusy('answer')
     setError(null)
     void pending.answer(answer)
       .then(() => { actions.clear(pending.key) })
       .catch((cause: unknown) => {
+        settling.current = false
         setBusy(null)
         setError({ text: cause instanceof Error ? cause.message : String(cause) })
       })
+  }
+
+  const chooseAndSubmit = (label: string): void => {
+    if (settling.current) return
+    const nextDrafts = drafts.map((item, itemIndex) => itemIndex === index
+      ? { selected: [label], custom: '', skipped: false }
+      : item)
+    replaceProgress(index, nextDrafts)
+    setError(null)
+    submitDrafts(nextDrafts)
   }
 
   const continueFlow = (): void => {
@@ -320,39 +338,54 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
                   const selected = draft.selected.includes(option.label)
                   const display = parseRecommendedLabel(option.label)
                   return (
-                    <button
-                      type="button" key={`${option.label}-${String(optionIndex)}`}
-                      className={clsx(css.option, selected && question.multiSelect !== true && css.optionSelected)}
-                      role={question.multiSelect === true ? 'checkbox' : 'radio'}
-                      aria-checked={selected}
-                      aria-label={display.label}
-                      disabled={busy !== null}
-                      onClick={() => { choose(option.label) }}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter' || !drafts.every(completed)) return
-                        event.preventDefault()
-                        submitDrafts(drafts)
-                      }}
-                    >
-                      {question.multiSelect === true
-                        ? (
-                          <span className={clsx(css.checkbox, selected && css.checkboxChecked)} aria-hidden="true">
-                            {selected && <IconCheckOutline14 size={12} />}
+                    <div className={css.optionRow} key={`${option.label}-${String(optionIndex)}`}>
+                      <button
+                        type="button"
+                        className={clsx(css.option, canQuickSubmit && css.optionWithAction,
+                          selected && question.multiSelect !== true && css.optionSelected)}
+                        role={question.multiSelect === true ? 'checkbox' : 'radio'}
+                        aria-checked={selected}
+                        aria-label={display.label}
+                        disabled={busy !== null}
+                        onClick={() => { choose(option.label) }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' || !drafts.every(completed)) return
+                          event.preventDefault()
+                          submitDrafts(drafts)
+                        }}
+                      >
+                        {question.multiSelect === true
+                          ? (
+                            <span className={clsx(css.checkbox, selected && css.checkboxChecked)} aria-hidden="true">
+                              {selected && <IconCheckOutline14 size={12} />}
+                            </span>
+                          )
+                          : <span className={css.number}>{optionIndex + 1}</span>}
+                        <span className={css.optionCopy}>
+                          <span className={css.optionLine}>
+                            <span className={css.optionLabel}>{display.label}</span>
+                            {display.recommended && (
+                              <span className={css.badge}>{t('option.recommended')}</span>
+                            )}
+                            {option.description !== undefined && (
+                              <span className={css.description}>{option.description}</span>
+                            )}
                           </span>
-                        )
-                        : <span className={css.number}>{optionIndex + 1}</span>}
-                      <span className={css.optionCopy}>
-                        <span className={css.optionLine}>
-                          <span className={css.optionLabel}>{display.label}</span>
-                          {display.recommended && (
-                            <span className={css.badge}>{t('option.recommended')}</span>
-                          )}
-                          {option.description !== undefined && (
-                            <span className={css.description}>{option.description}</span>
-                          )}
                         </span>
-                      </span>
-                    </button>
+                      </button>
+                      {canQuickSubmit && (
+                        <button
+                          type="button"
+                          className={css.quickAction}
+                          aria-label={`${t('action.selectSubmit')}: ${display.label}`}
+                          title={t('action.selectSubmit')}
+                          disabled={busy !== null}
+                          onClick={() => { chooseAndSubmit(option.label) }}
+                        >
+                          {t('submit')}
+                        </button>
+                      )}
+                    </div>
                   )
                 })}
 

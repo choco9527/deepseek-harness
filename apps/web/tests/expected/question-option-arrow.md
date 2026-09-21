@@ -1,0 +1,20 @@
+- region "Choose an approach":
+  - heading "Choose an approach" [level=2]
+  - button "Collapse the question card" [expanded]:
+    - img
+  - button "Dismiss all questions":
+    - img
+  - radiogroup:
+    - radio "First": 1 First
+    - 'button "Select and submit: First"': Submit
+    - radio "Second" [checked]: 2 Second
+    - 'button "Select and submit: Second"': Submit
+    - textbox "Type your answer"
+  - button "Previous question":
+    - img
+  - text: 2 / 2
+  - button "Next question" [disabled]:
+    - img
+  - status
+  - button "Skip this question"
+  - button "Submit"

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-When an agent asks a question in the Web client, this package replaces the chat composer with an interactive question surface. Users can move through questions, choose one or multiple options, enter custom answers, skip items, and submit one structured answer batch. Single-choice selections advance immediately, while drafts survive Session navigation for the lifetime of the page. A single question with a supported presentation intent can use a dedicated surface, including the plan-review card with `Chat about it`, `Refuse`, and `Approve` actions.
+When an agent asks a question in the Web client, this package replaces the chat composer with an interactive question surface. Users can move through questions, choose one or multiple options, enter custom answers, skip items, and submit one structured answer batch. Single-choice selections advance immediately, with an inline submit button on the final question, while drafts survive Session navigation for the lifetime of the page. A single question with a supported presentation intent can use a dedicated surface, including the plan-review card with `Chat about it`, `Refuse`, and `Approve` actions.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ When an agent asks a question in the Web client, this package replaces the chat 
 <a id="use-this-package"></a>
 ## Use this package
 
-When the agent asks a question, the composer becomes the question surface: answer each question, navigate with the pager, or skip it. Single-select choices advance immediately; Enter continues the flow and submits once every question is answered or skipped, while Shift+Enter breaks a line instead (during IME composition Enter only confirms the input candidate without advancing).
+When the agent asks a question, answer each question, navigate with the pager, or skip it. Clicking a single-choice option advances immediately except on the final question, where it only selects the answer. Hovering or focusing a final single-choice row reveals a compact Submit button with a filled background; it selects that option and submits the batch or returns to an unanswered question. Touch devices keep these buttons visible. Multi-select and custom answers retain the footer action. Enter continues the flow and submits once every question is answered or skipped; Shift+Enter inserts a line break, and IME Enter only confirms the input candidate.
 
 ### Answering
 
