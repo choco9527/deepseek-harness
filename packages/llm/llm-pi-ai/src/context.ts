@@ -6,6 +6,7 @@
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { contentHasImage, LlmError, offloadedImageText, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
+import { offloadHistoricalImages } from './request-budget.ts'
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {
   AttachmentId,
@@ -221,6 +222,8 @@ export interface PiImageRequestContext {
   resolveImageAccess: ImageAttachmentAccessResolver
   /** Request-level bound on base64-encoded image payload; omission leaves every image in place. */
   maxRequestImageBytes?: number
+  /** Keep current user images and the newest tool image when enforcing gateway limits. */
+  protectRecentImages?: boolean
   /** Route pixel and raw encoded-byte budgets. */
   requestImagePolicy?: ImageRequestPolicy
 }
@@ -277,15 +280,16 @@ async function toPiContextWithImages(
   }
   assertSupportedImageRoles(options.messages)
   const split = splitSystemPrompt(options)
-  const requestMessages = offloadRequestImagesWithPolicy(split.messages, {
+  const offload = images.protectRecentImages === true ? offloadHistoricalImages : offloadRequestImagesWithPolicy
+  const requestMessages = offload(split.messages, {
     representation: 'base64',
     ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
     byteQuantum: 1,
     byteLength: ref => Math.min(ref.bytes, requestImagePolicy.maxBytes),
     placeholder: ref => offloadedImageText(ref, resolveImageAccess(ref)),
-  })
+  }, true)
   const requestImages = await prepareRequestImages(requestMessages, attachments, requestImagePolicy, options.signal)
-  const exactMessages = offloadRequestImagesWithPolicy(requestMessages, {
+  const exactMessages = offload(requestMessages, {
     representation: 'base64',
     ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
     byteQuantum: 1,

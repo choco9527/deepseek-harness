@@ -86,7 +86,16 @@ describe('modality schema boundary', () => {
 })
 
 describe('request image policy bounds', () => {
+  it('accepts an opt-in complete request-body budget without changing other routes', () => {
+    expect(routeWith({ maxRequestBodyBytes: 9_000_000 })).not.toThrow()
+    expect(resolveProfiles({ openai: {} }).get('openai')?.maxRequestBodyBytes).toBeUndefined()
+    expect(resolveProfiles({ openai: { maxRequestBodyBytes: 9_000_000 } }).get('openai')?.maxRequestBodyBytes)
+      .toBe(9_000_000)
+  })
   it.each([
+    ['maxRequestBodyBytes', 0, /maxRequestBodyBytes must be a positive safe integer/],
+    ['maxRequestBodyBytes', 1.5, /maxRequestBodyBytes must be a positive safe integer/],
+    ['maxRequestBodyBytes', Number.MAX_SAFE_INTEGER + 1, /maxRequestBodyBytes must be a positive safe integer/],
     ['requestImagePixelBudget', 0, /requestImagePixelBudget must be a positive safe integer/],
     ['requestImagePixelBudget', Number.MAX_SAFE_INTEGER + 1, /requestImagePixelBudget must be a positive safe integer/],
     ['requestImageMaxBytes', 0, /requestImageMaxBytes must be a positive safe integer/],

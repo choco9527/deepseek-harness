@@ -73,6 +73,24 @@ function imageContext(attachments: AttachmentStore) {
 }
 
 describe('toPiContext', () => {
+  it('checks protected images against prepared bytes rather than their larger stored versions', async () => {
+    const attachment: ImageAttachmentRef = {
+      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      mediaType: 'image/png', bytes: 300, width: 10, height: 10,
+    }
+    const options = {
+      provider: 'openai', model: 'gpt-4.1',
+      messages: [createUserMessage({ source: { kind: 'user' }, content: [{ type: 'image', attachment }] })],
+    }
+    const images = {
+      ...imageContext(attachmentStore(ref => Promise.resolve(requestVersion(ref)))),
+      protectRecentImages: true, maxRequestImageBytes: 4,
+    }
+    const context = await toPiContext(options, images)
+    expect(context.messages[0]).toMatchObject({ content: expect.arrayContaining([{ type: 'image', data: 'AQID', mimeType: 'image/png' }]) })
+    await expect(toPiContext(options, { ...images, maxRequestImageBytes: 3 })).rejects.toThrow(/current images/)
+  })
+
   it('maps system prompt, user text, and tools', () => {
     const context = toPiContext({
       provider: 'deepseek',

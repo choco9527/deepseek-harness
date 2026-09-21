@@ -84,9 +84,12 @@ kind: "package-reference"
 | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
 | `requestImageMaxBytes` | `1 MiB` | 每张请求图片在 base64 扩展前的编码字节目标 |
 | `maxRequestImageBytes` | `20 MiB` | 带最旧优先卸载的 base64 图片载荷总上限 |
+| `maxRequestBodyBytes` | 无 | 可选的 `openai-completions` 完整 UTF-8 JSON 上限，在 HTTP 发送前检查 |
 | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
+
+对于请求体上限为 10 MB 的网关，可在其 Chat Completions 路由配置 `maxRequestBodyBytes: 9000000` 和 `maxRequestImageBytes: 6000000`。启用请求体上限后，图片卸载保留最新用户消息中的附件，以及该消息之后最新一条含图片消息中的图片。旧图片替换为带身份的占位文本，不删除附件对象、不改写会话历史。准备后的受保护图片仍超过图片预算，或完整请求仍超过请求体预算时，在本地返回 `INVALID_REQUEST`；减少当前附件或压缩对话后再发送。其他协议在网络请求前以 `INVALID_CONFIG` 拒绝此选项。
 
 ### 登录提供方
 
@@ -212,6 +215,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 这些限制说明适配器在哪里停止、由未来工作接续。它们是当前包约束，不是通用 pi-ai 对比或任务积压。
 
 - **`maxRequestImageBytes` 只计算 base64 图片载荷**——文本、工具、描述符与 JSON 结构在该上限之外，因此它必须留有余量地低于网关请求体上限。卸载是确定性请求投影，不会记录为会话事件。
+- **完整请求体检查需显式启用，且仅支持 Chat Completions**——它拒绝仍然超限的载荷，不压缩文本、不重试，也不按语义相关性挑选图片。其他协议和传输方式需要单独验证载荷钩子。
 - **登录只存在于发起它的进程中**——授权尝试不持久，因此登录中途刷新页面会放弃它，用户需要重新开始。退出登录是对已存储记录执行 `deleteRecord`，只在本地忘记它，不会告知签发方。
 - **提供方原生发现经本插件的 ambient context 回答**——不点名凭据的路由交由目录提供方自身解析，它会询问环境值（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE` 及各提供方自有集合）与本地凭据文件。两个问题都在这里得到回答：凭据 seam 先于进程环境被查询，文件存在性则针对宿主进程的文件系统以 `~` 展开后检查。它做不到的是*读取*凭据文件内容——自行解析 `~/.aws/credentials` 的提供方会直接读取，不经该 seam。
 - **设置可以新增或覆盖路由，不能移除组合路由**——用户层覆盖组合 base，因此删除 `cordis.yml` 提供的提供方属于组合变更。

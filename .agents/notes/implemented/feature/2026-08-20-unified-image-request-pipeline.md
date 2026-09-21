@@ -28,6 +28,8 @@ The `variantId` and cache path cover the normalized attachment id, transform ver
 
 Request-size offload is a deterministic oldest-first projection. Before reading attachments, each route uses `min(attachmentBytes, requestVersionMaxBytes)` as a conservative upper bound and removes the oldest over-budget prefix. Only retained attachments are read and transformed, so an omitted missing or corrupt object cannot block the request. A second projection uses exact derived lengths without bringing omitted images back. DeepSeek defaults to 128MiB and 600 referenced images. Its removed prefix advances past successive 64MiB byte boundaries and in 20-image count quanta, so 129 one-megabyte images remove the oldest 65, retain 64MiB, and keep that prefix stable until total history passes 192MiB. Pi-ai retains a configurable base64 request bound. Each omitted image becomes a per-image placeholder that retains its identity and access resolved for the current tool execution world, including nested tool-result images, while append-only session history keeps the original references.
 
+Pi-ai Chat Completions routes can additionally bound the complete UTF-8 JSON request with `maxRequestBodyBytes`. This opt-in checks the SDK payload, including tools and text, before HTTP. Its image projection reserves the latest user attachments and the newest image-bearing message after that user, then offloads older images. Preliminary estimates never reject protected images before request-version preparation; exact image overflow or complete-body overflow returns `INVALID_REQUEST` without retry. It does not rewrite sessions or delete attachments. Other protocols reject the option until their final payload hooks are verified.
+
 ### Stable handles
 
 Every retained request image is preceded by its display name or complete attachment id and actual request dimensions. The attachment provider can supply its host object location; the LLM consumer combines it with the current filesystem mapping before adding an absolute read-only path, normalized dimensions, and media type. The descriptor states that normalization or request projection may have resized or re-encoded the upload, so the model cannot infer original upload properties from either representation. User messages, tool results, agent-loop requests, compaction, and direct `ctx.llm.stream` calls share this projection. The path is resolved independently from the deterministic request version and does not enter its `variantId`, the durable reference, or the session log.
@@ -45,6 +47,8 @@ A 16-bit RGB or RGBA PNG is normal admitted input and converts to 8-bit sRGB/sRG
 Historical attachment objects that later disappear or fail integrity verification remain fail-loud. Durable quarantine and verified recovery require session events and are tracked by [Quarantine unreadable historical attachments](../../proposed/bug-fix/2026-08-20-attachment-read-quarantine.md).
 
 ## Alternatives considered
+
+**Rely on token compaction for HTTP byte limits.** Base64 images can exceed a gateway's body limit before the token window reaches its compaction threshold. Independent byte bounds prevent that mismatch; remaining text/tool overflow requires an explicit smaller request rather than a hidden retry or lossy summary.
 
 **Use one 1MiB normalized attachment for storage and requests.** This makes model resolution determine durable image detail and combines local storage, inline expansion, Files quota, and model pixels into one setting. Independent normalization and request policies keep those responsibilities explicit.
 

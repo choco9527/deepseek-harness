@@ -1,0 +1,11 @@
+version: 1
+scenario: pi-ai-request-body-budget
+profile: headless
+composition: pi-ai-request-body-budget
+recording: authored
+header:
+  class: pi-ai-request-body-budget
+  pin: true
+  toolSchemasSource: text-turn
+environment:
+  PI_BUDGET_TEST_KEY: unused-test-key

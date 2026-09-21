@@ -1,0 +1,14 @@
+# The real adapter must refuse this payload before contacting the loopback endpoint.
+- id: llm-deepseek
+  disabled: true
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      budget-test:
+        api: openai-completions
+        apiKeyEnv: PI_BUDGET_TEST_KEY
+        baseURL: http://127.0.0.1:1/v1
+        maxRequestBodyBytes: 1
+        models:
+          - id: budget-model

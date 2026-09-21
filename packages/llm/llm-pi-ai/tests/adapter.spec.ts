@@ -73,6 +73,35 @@ beforeEach(() => {
 })
 
 describe('PiAiAdapter provider routing', () => {
+  it('refuses a body limit on unverified protocols before network I/O', async () => {
+    const server = await mockServer([])
+    const ctx = await harness(server.url, { api: 'openai-responses', maxRequestBodyBytes: 9_000_000 })
+    expect((await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })).finish).toMatchObject({
+      kind: 'error', failure: { code: 'INVALID_CONFIG', message: expect.stringContaining('openai-completions') },
+    })
+    expect(server.requests).toHaveLength(0)
+  })
+
+  it('checks the complete Chat Completions body before HTTP and counts tool schemas', async () => {
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+    const options = {
+      model: 'deepseek-v4-flash',
+      messages: [createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text' as const, text: '你好' }] })],
+      tools: [{ name: 'example', description: '工具'.repeat(100), parameters: { type: 'object' as const, properties: {} } }],
+    }
+    const baseline = await harness(server.url)
+    const first = await assemble(baseline, options)
+    expect(first.finish).toEqual({ kind: 'stop' })
+    const bytes = Buffer.byteLength(JSON.stringify(server.requests[0]))
+    const exact = await harness(server.url, { maxRequestBodyBytes: bytes })
+    expect((await assemble(exact, options)).finish).toEqual({ kind: 'stop' })
+    const bounded = await harness(server.url, { maxRequestBodyBytes: bytes - 1 })
+    expect((await assemble(bounded, options)).finish).toMatchObject({
+      kind: 'error', failure: { code: 'INVALID_REQUEST', message: expect.stringContaining('request body') },
+    })
+    expect(server.requests).toHaveLength(2)
+  })
+
   it('resolves a catalog model dynamically and uses a private endpoint', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = await harness(server.url)

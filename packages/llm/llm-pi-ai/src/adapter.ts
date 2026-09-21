@@ -61,6 +61,7 @@ import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
 import { toStreamChunks } from './stream.ts'
+import { assertRequestBodyBudget } from './request-budget.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
 interface PiAiSnapshot {
@@ -341,6 +342,11 @@ export class PiAiAdapter extends LlmAdapter {
     // the one it started with and the next call picks up the new one.
     const profile = this.profileOf(snapshot, options.provider)
     const model = this.modelOf(snapshot, options.provider, options.model)
+    const maxRequestBodyBytes = profile.maxRequestBodyBytes
+    if (maxRequestBodyBytes !== undefined && model.api !== 'openai-completions') {
+      // TODO(request-body-budget): Verify final payload hooks before enabling other protocols or WebSocket transports.
+      throw new LlmError('maxRequestBodyBytes currently requires openai-completions', 'INVALID_CONFIG')
+    }
     const reasoning = resolveReasoningLevel(
       model,
       options.reasoningEffort ?? profile.reasoning,
@@ -372,6 +378,7 @@ export class PiAiAdapter extends LlmAdapter {
           attachments,
           resolveImageAccess: ref => this.config.resolveImageAccess?.(attachments, ref),
           maxRequestImageBytes: profile.maxRequestImageBytes,
+          protectRecentImages: profile.maxRequestBodyBytes !== undefined,
           requestImagePolicy: {
             maxPixels: profile.requestImagePixelBudget,
             maxBytes: profile.requestImageMaxBytes,
@@ -386,6 +393,12 @@ export class PiAiAdapter extends LlmAdapter {
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
+        ...maxRequestBodyBytes === undefined ? {} : {
+          onPayload: (payload: unknown): undefined => {
+            assertRequestBodyBudget(payload, maxRequestBodyBytes)
+            return undefined
+          },
+        },
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false
