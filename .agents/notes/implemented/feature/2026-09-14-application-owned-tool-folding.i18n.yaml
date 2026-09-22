@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-14-application-owned-tool-folding.md
-2026-09-14-application-owned-tool-folding.md: a9bc5aed26c5dec7a89265a386c97c6d72dcce69
-2026-09-14-application-owned-tool-folding.zh.md: 6736d074f1b7c8cdf48364a582f951874da0eb15
+2026-09-14-application-owned-tool-folding.md: ae6e11c78489045317d23e805128aa979471218d
+2026-09-14-application-owned-tool-folding.zh.md: 2e86a96b9e9af8398cad4fb8de839f78b3bb3b90

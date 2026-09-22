@@ -138,7 +138,7 @@ function processSpec(state: TurnProcessState, turn: TurnLocation): TurnProcessSp
     return {
       turn: turn.turn,
       controlAnchorSeq,
-      processStartSeq: controlAnchorSeq,
+      processStartSeq: turn.start?.seq ?? controlAnchorSeq,
       answerAnchorSeq: null,
       answerStep: null,
       inlineReasoning: false,

@@ -35,6 +35,11 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
       { count: node.data.subagentCount },
     ))
   }
+  const contextCount = turnProcess.toolsOnly ? (turnProcess.contextCount ?? 0) : 0
+  if (contextCount > 0) labels.push(t(
+    contextCount === 1 ? 'message.turnProcess.contexts.one' : 'message.turnProcess.contexts.other',
+    { count: contextCount },
+  ))
   const label = labels.length === 0
     ? t('message.turnProcess.thoughtForAWhile')
     : labels.join(t('message.turnProcess.separator'))
@@ -47,6 +52,7 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
       data-turn-process-messages={turnProcess.toolsOnly ? undefined : node.data.messageCount}
       data-turn-process-tool-calls={node.data.toolCallCount}
       data-turn-process-subagents={node.data.subagentCount}
+      data-turn-process-contexts={contextCount || undefined}
       aria-expanded={open}
       onClick={(event) => {
         event.currentTarget.focus()

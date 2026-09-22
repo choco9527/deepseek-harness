@@ -10,9 +10,9 @@ Compact Chat can hide a useful Assistant reply when later tool work produces ano
 
 ## Decision
 
-An opt-in `ui-chat` configuration, `toolsOnlyTranscript`, restricts completed-Turn folding to Tool nodes, leaves messages in their original order, and omits message counts from the disclosure. It hides the preference selector and ignores durable mode preferences without migrating or overwriting them. The default remains upstream Normal/Compact behavior. Conversation projection, Session events, and provider requests are unchanged.
+An opt-in `ui-chat` configuration, `toolsOnlyTranscript`, restricts completed-Turn folding to Tool and Context nodes, leaves messages in their original order, and omits message counts from the disclosure. Context entries contribute a separate count so context-only process groups also fold. Independent extension cards remain visible and interactive, including inside the process range. It hides the preference selector and ignores durable mode preferences without migrating or overwriting them. The default remains upstream Normal/Compact behavior. Session events and provider requests are unchanged.
 
-The existing final-answer, closed-Turn, and complete-history requirements remain. Search and keyboard-focus reveal still expand hidden tools. Reasoning keeps its own renderer disclosure and is not hidden by the tool toggle.
+The closed-Turn requirement remains; [answerless-Turn folding](../bug-fix/2026-09-22-answerless-turn-tool-folding.md) removes the final-answer requirement only for the application-owned policy. Earlier unloaded pages do not prevent eligible loaded Turns from folding; pagination does not determine whether a Turn is complete. Search and keyboard-focus reveal still expand hidden process rows. Reasoning keeps its own renderer disclosure and is not hidden by the process toggle.
 
 Host plugin configuration is not implicitly forwarded by the client module graph. The Host publishes only this public policy through `webserver/index-inject`; the browser validates the bootstrap value before registering Chat. A recorded-Session browser replay covers this transport as well as tool visibility, since direct client mounts cannot detect a missing Host-to-browser handoff.
 
@@ -24,4 +24,4 @@ Host plugin configuration is not implicitly forwarded by the client module graph
 
 ## Consequences
 
-Applications gain fixed presentation through composition instead of a downstream transcript fork. They retain a small core configuration dependency across upgrades. Integration coverage must check mixed prose/tool order, tools-only counts, old preferences, partial history, live completion, and unchanged upstream behavior.
+Applications gain fixed presentation through composition instead of a downstream transcript fork. They retain a small core configuration dependency across upgrades. Integration coverage must check mixed prose/tool order, tool and context counts, independent interactive cards, old preferences, partial history, live completion, and unchanged upstream behavior.

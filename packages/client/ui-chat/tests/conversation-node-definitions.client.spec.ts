@@ -314,6 +314,33 @@ describe('built-in conversation node Definitions', () => {
     expect(hasAssistantReplyContent([{ kind: 'other', block: { type: 'future' } }])).toBe(true)
   })
 
+  it.each([
+    { kind: 'aborted', reason: { kind: 'user' } },
+    { kind: 'error', error: { code: 'TRANSPORT', message: 'request failed' } },
+    { kind: 'completed' },
+  ])('retains pre-tool context in an answerless ended Turn ($kind) on append and replay', (reason) => {
+    const entries = [
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'user/message', { ...textMessage('context-only', 'catalog'), turn: 1, step: 1,
+        source: { kind: 'plugin', plugin: 'skill-catalog' } }, { surfaceOp: 'append' }),
+      at(4, 'tool/call', { turn: 1, step: 1, callId: 'work', name: 'read', arguments: '{}' }),
+      at(5, 'tool/result', { turn: 1, step: 1, message: toolResult('work', 'done') }, { surfaceOp: 'append' }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+    ]
+    const end = at(7, 'turn/end', { turn: 1, reason })
+    const live = assembler(entries)
+    live.append(end)
+    live.flush()
+    for (const value of [live, assembler([...entries, end])]) {
+      const turn = snapshot(value).timeline.turns.get(1)!
+      expect(turn.status).toBe('closed')
+      expect(turn.data.get('turn-process')).toMatchObject({
+        processStartSeq: 1, answerAnchorSeq: null, answerStep: null, toolCallCount: 1,
+      })
+    }
+  })
+
   it('projects one reversible process window before the finalized answer', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
@@ -337,7 +364,7 @@ describe('built-in conversation node Definitions', () => {
       }),
     ])
     const process = () => snapshot(value).timeline.turns.get(1)?.data.get('turn-process')
-    expect(process()).toMatchObject({ processStartSeq: 4, answerAnchorSeq: null, answerStep: null })
+    expect(process()).toMatchObject({ processStartSeq: 1, answerAnchorSeq: null, answerStep: null })
     expect(node(snapshot(value), 'turn-process')?.data).toMatchObject({ answerAnchorSeq: null })
 
     value.append(at(7, 'tool/call', {
@@ -356,7 +383,7 @@ describe('built-in conversation node Definitions', () => {
     }))
     value.flush()
     expect(process()).toMatchObject({
-      processStartSeq: 4,
+      processStartSeq: 1,
       answerAnchorSeq: null,
       answerStep: null,
       inlineReasoning: false,

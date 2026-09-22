@@ -410,7 +410,7 @@ Source: [`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index
 ```ts config-catalog
 /** Presentation overrides supplied by the application, not user preferences. */
 export interface Config {
-  /** Keep messages visible, fold only completed-turn tools, and hide the mode selector. */
+  /** Keep replies visible, fold completed-turn tools and context, and hide the mode selector. */
   toolsOnlyTranscript?: boolean
 }
 ```

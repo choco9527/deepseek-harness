@@ -18,6 +18,7 @@ function samePresentation(
     && left.turn === right.turn
     && left.turnClosed === right.turnClosed
     && left.hasExternalProcess === right.hasExternalProcess
+    && left.contextCount === right.contextCount
     && left.compactAnswer === right.compactAnswer)
 }
 
@@ -45,6 +46,7 @@ function derivePresentation(
   }
 
   let hasExternalProcess = false
+  let contextCount = 0
   let compactAnswer = true
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
@@ -57,6 +59,7 @@ function derivePresentation(
     if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)
       || node.anchorSeq < spec.processStartSeq
       || (spec.answerAnchorSeq !== null && node.anchorSeq >= spec.answerAnchorSeq)) continue
+    if (node.kind === 'context' && node.visibility !== 'hidden') contextCount += 1
     if (node.kind !== 'assistant-step' || spec.answerStep === null || node.data.step !== spec.answerStep) {
       hasExternalProcess = true
     }
@@ -66,6 +69,7 @@ function derivePresentation(
     spec,
     turnClosed: location.turn.status === 'closed',
     hasExternalProcess,
+    contextCount,
     compactAnswer,
   }
 }

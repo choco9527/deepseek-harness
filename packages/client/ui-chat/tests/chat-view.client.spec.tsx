@@ -44,6 +44,12 @@ import { ChatSnapshotBuilder } from '../src/client/conversation-nodes/chat-snaps
 import type { TurnProcessSpec } from '../src/client/contract/turn-process.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
+declare module '../src/client/contract/chat-nodes.ts' {
+  interface ChatNodeDataMap {
+    readonly 'fixture-interaction': { readonly label: string }
+  }
+}
+
 // Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
 
@@ -284,7 +290,10 @@ function makeHarness(
     fallback?: React.ReactNode
     hookContext?: unknown
   }) => {
-    if (nodeSlotOverride !== undefined) return nodeSlotOverride(key as never, owner as never, opts as never)
+    if (nodeSlotOverride !== undefined) {
+      const override = nodeSlotOverride(key as never, owner as never, opts as never)
+      if (override !== undefined) return override
+    }
     if (key !== 'conversation.chat.node') return opts?.fallback ?? null
     const nodeOwner = owner as RoutedChatNodeOwner
     const turnData = opts?.hookContext as
@@ -1325,7 +1334,7 @@ describe('ChatView', () => {
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
   })
 
-  it.each(['normal', 'compact'] as const)('keeps all prose in order and folds only tools regardless of %s', (mode) => {
+  it.each(['normal', 'compact'] as const)('keeps all prose in order and folds tools and context regardless of %s', (mode) => {
     const h = makeHarness({
       nodes: [
         user(1, 'question'), context(2, 'runtime policy', 1),
@@ -1337,20 +1346,102 @@ describe('ChatView', () => {
     })
     h.setTranscriptView(mode)
     const view = render(<h.ChatView {...h.props} toolsOnlyTranscript />)
-    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 个 subagent' })
+    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 个 subagent · 1 条上下文' })
     expect(toggle.hasAttribute('data-turn-process-messages')).toBe(false)
     const rows = [...view.container.querySelectorAll<HTMLElement>('[data-chat-flow-kind]')]
     const visible = () => rows.filter(row => !row.hasAttribute('hidden')).map(row => row.dataset.chatFlowKind)
-    expect(visible()).toEqual(['user', 'turn-process', 'context', 'assistant-step', 'assistant-step', 'assistant-step', 'turn-tail'])
+    expect(visible()).toEqual(['user', 'turn-process', 'assistant-step', 'assistant-step', 'assistant-step', 'turn-tail'])
     expect(rows.filter(row => row.hasAttribute('data-turn-process-member')).map(row => row.dataset.chatFlowKind))
-      .toEqual(['tool-call', 'tool-call'])
+      .toEqual(['context', 'tool-call', 'tool-call'])
     fireEvent.click(toggle)
     expect(visible()).toEqual(['user', 'turn-process', 'context', 'assistant-step', 'tool-call', 'assistant-step', 'tool-call', 'assistant-step', 'turn-tail'])
     fireEvent.click(toggle)
     for (const text of ['before tools', 'between tools', 'final answer']) {
       expect(view.getByText(text).closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
     }
+    act(() => { h.setTranscriptView(mode === 'normal' ? 'compact' : 'normal') })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(rows.filter(row => row.hasAttribute('hidden')).map(row => row.dataset.chatFlowKind))
+      .toEqual(['context', 'tool-call', 'tool-call'])
     expect([...view.container.querySelectorAll('[data-chat-flow-kind]')]).toEqual(rows)
+  })
+
+  it.each(['stopped', 'failed', 'completed'] as const)('folds an ended %s Turn without a final reply and can reopen its process', (ending) => {
+    const nodes: ConversationNode[] = [user(1, 'question'), context(2, 'catalog', 1),
+      assistant(3, 'checking', 1, 1), toolResult(4, 'a'),
+      { ...assistant(5, '', 1, 2), ...(ending === 'stopped' ? { interrupted: true } : {}), blocks: [] },
+      ...(ending === 'failed' ? [turnError(6)] : []),
+    ]
+    const h = makeHarness({ nodes, running: true, hasMore: true })
+    const view = render(<h.ChatView {...h.props} toolsOnlyTranscript />)
+    expect(turnProcessControl(view.container)).toBeNull()
+    act(() => { h.set({ running: false, turnEnds: new Map([[1, 7]]) }) })
+    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 条上下文' })
+    const processRows = () => [...view.container.querySelectorAll('[data-chat-flow-kind="tool-call"], [data-chat-flow-kind="context"]')]
+    expect(processRows().map(row => row.getAttribute('hidden'))).toEqual(['until-found', 'until-found'])
+    expect(view.getByText('checking').closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
+    if (ending === 'failed') expect(view.getByText('plugin exploded').closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(processRows().every(row => !row.hasAttribute('hidden'))).toBe(true)
+    act(() => { h.set({ hasMore: false }) })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(processRows().every(row => row.getAttribute('hidden') === 'until-found')).toBe(true)
+    view.unmount()
+    const restored = makeHarness({ nodes, turnEnds: new Map([[1, 7]]) })
+    const history = render(<restored.ChatView {...restored.props} toolsOnlyTranscript />)
+    expect(history.getByRole('button', { name: '1 次工具调用 · 1 条上下文' }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it.each(['normal', 'compact'] as const)('keeps answerless closed Turns expanded in upstream %s mode', (mode) => {
+    const h = makeHarness({
+      nodes: [user(1, 'question'), context(2, 'catalog', 1), toolResult(3, 'a'),
+        { ...assistant(4, '', 1, 2), blocks: [] }],
+      turnEnds: new Map([[1, 5]]),
+    })
+    h.setTranscriptView(mode)
+    const view = render(<h.ChatView {...h.props} />)
+    expect(turnProcessControl(view.container)).toBeNull()
+    const rows = [...view.container.querySelectorAll('[data-chat-flow-kind="tool-call"], [data-chat-flow-kind="context"]')]
+    expect(rows).toHaveLength(2)
+    expect(rows.every(row => !row.hasAttribute('hidden'))).toBe(true)
+  })
+
+  it.each([true, false])('folds context and keeps extension interactions usable with final reply %s', (hasReply) => {
+    const snapshot = chatSnapshotFixture({
+      nodes: [user(1, 'question'), context(2, 'catalog', 1), context(3, 'clock', 1),
+        assistant(5, hasReply ? 'answer' : '')],
+      turnEnds: new Map([[1, 6]]),
+    })
+    const turn = snapshot.timeline.turns.get(1)!
+    const card: ChatNode<'fixture-interaction'> = {
+      key: 'fixture:interaction', id: 'interaction', target: 'chat', kind: 'fixture-interaction',
+      anchorSeq: 4, location: { kind: 'turn', turn }, visibility: 'visible', data: { label: 'Apply crop' },
+    }
+    const h = makeHarness({ hasMore: true, chat: new ChatSnapshotBuilder().replace({
+      nodes: [...snapshot.nodes.values(), card], timeline: snapshot.timeline,
+    }) })
+    const apply = vi.fn()
+    h.setNodeRenderer(((key: string, owner: object) => {
+      if (key !== 'conversation.chat.node') return undefined
+      const node = (owner as RoutedChatNodeOwner).node
+      return node.kind === 'fixture-interaction' ? <button onClick={apply}>{node.data.label}</button> : undefined
+    }) as React.ComponentProps<typeof ChatNodeSeat>['renderSlot'])
+    const view = render(<h.ChatView {...h.props} toolsOnlyTranscript />)
+    const toggle = view.getByRole('button', { name: '2 条上下文' })
+    const contexts = [...view.container.querySelectorAll('[data-chat-flow-kind="context"]')]
+    expect(contexts.map(row => row.getAttribute('hidden'))).toEqual(['until-found', 'until-found'])
+    const button = view.getByRole('button', { name: 'Apply crop' })
+    expect(button.closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
+    fireEvent.click(button)
+    expect(apply).toHaveBeenCalledOnce()
+    fireEvent(contexts[0]!, new Event('beforematch'))
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(contexts.map(row => row.getAttribute('hidden'))).toEqual([null, null])
+    fireEvent.click(toggle)
+    expect(contexts.map(row => row.getAttribute('hidden'))).toEqual(['until-found', 'until-found'])
+    expect(view.getByRole('button', { name: 'Apply crop' })).toBe(button)
   })
 
   it('creates no tool disclosure for prose and reasoning alone', () => {
@@ -1369,18 +1460,18 @@ describe('ChatView', () => {
     expect(view.getByText('earlier reply').closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
   })
 
-  it('keeps tools visible while running or history is partial, then folds only tools', () => {
-    const nodes = [user(1, 'question'), assistant(2, 'working', 1, 1), toolResult(3, 'a')]
-    const h = makeHarness({ nodes, running: true })
+  it('keeps live tools and context visible, then folds on completion with earlier history unloaded', () => {
+    const nodes = [user(1, 'question'), context(2, 'policy', 1), assistant(3, 'working', 1, 1), toolResult(4, 'a')]
+    const h = makeHarness({ nodes, running: true, hasMore: true })
     const view = render(<h.ChatView {...h.props} toolsOnlyTranscript />)
     expect(turnProcessControl(view.container)).toBeNull()
-    act(() => { h.set({ nodes: [...nodes, assistant(4, 'done', 1, 2)], running: false,
-      hasMore: true, turnEnds: new Map([[1, 5]]) }) })
-    expect(turnProcessControl(view.container)).toBeNull()
-    expect(view.container.querySelector('[data-turn-process-member]')).toBeNull()
-    act(() => { h.set({ hasMore: false }) })
+    expect(view.container.querySelector('[data-chat-flow-kind="context"]')?.hasAttribute('hidden')).toBe(false)
+    expect(view.container.querySelector('[data-chat-flow-kind="tool-call"]')?.hasAttribute('hidden')).toBe(false)
+    act(() => { h.set({ nodes: [...nodes, assistant(5, 'done', 1, 2)], running: false,
+      hasMore: true, turnEnds: new Map([[1, 6]]) }) })
     expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
     expect(view.container.querySelector('[data-chat-flow-kind="tool-call"]')?.getAttribute('hidden')).toBe('until-found')
+    expect(view.container.querySelector('[data-chat-flow-kind="context"]')?.getAttribute('hidden')).toBe('until-found')
     expect(view.getByText('working').closest('[data-chat-flow-kind]')?.hasAttribute('hidden')).toBe(false)
   })
 
@@ -1722,7 +1813,7 @@ describe('ChatView', () => {
     expect(contextRow?.getAttribute('hidden')).toBe('until-found')
   })
 
-  it('keeps a foldable closed Turn fully visible while history is partial', () => {
+  it('folds a closed Turn while earlier history is unloaded and preserves manual expansion after paging', () => {
     const h = makeHarness({
       nodes: [
         user(1, 'question'),
@@ -1736,17 +1827,19 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const contextRow = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="context"]')
 
-    expect(turnProcessControl(view.container)).toBeNull()
-    expect(contextRow?.getAttribute('hidden')).toBeNull()
-    expect(contextRow?.hasAttribute('data-turn-process-member')).toBe(false)
-
-    act(() => { h.set({ hasMore: false }) })
     const toggle = turnProcessControl(view.container)!
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(contextRow?.getAttribute('hidden')).toBe('until-found')
+    expect(contextRow?.hasAttribute('data-turn-process-member')).toBe(true)
+
+    fireEvent.click(toggle)
+    act(() => { h.set({ hasMore: false }) })
+    expect(turnProcessControl(view.container)).toBe(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(contextRow?.getAttribute('hidden')).toBeNull()
   })
 
-  it('withholds process controls for partial history and folds final-page groups', () => {
+  it('keeps open Turns expanded and folds closed Turns after history prepend', () => {
     const h = makeHarness({
       nodes: [user(9, 'visible question'), assistant(10, 'visible answer', 2)],
       hasMore: true,

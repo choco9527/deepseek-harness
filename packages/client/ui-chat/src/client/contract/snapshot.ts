@@ -76,6 +76,8 @@ export interface ChatTurnProcessPresentation {
   readonly spec: TurnProcessSpec
   readonly turnClosed: boolean
   readonly hasExternalProcess: boolean
+  /** Visible context rows inside the pre-answer process range. */
+  readonly contextCount: number
   readonly compactAnswer: boolean
 }
 

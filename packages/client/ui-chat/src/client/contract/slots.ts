@@ -97,8 +97,10 @@ export interface ChatNodeOwnerProps {
 
 /** Shared presentation state for one Turn-process answer generation. */
 export interface TurnProcessOwnerProps {
-  /** Exclude messages and inline reasoning from the tool disclosure. */
+  /** Fold only tools and context; exclude replies, inline reasoning and extension cards. */
   readonly toolsOnly?: boolean
+  /** Number of context rows included by the application-owned disclosure. */
+  readonly contextCount?: number
   readonly spec: TurnProcessSpec
   readonly foldable: boolean
   readonly open: boolean

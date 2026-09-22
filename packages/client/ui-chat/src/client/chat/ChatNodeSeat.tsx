@@ -12,7 +12,6 @@ interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly nodeKey: string
   readonly useChatNode: ChatViewSlotProps['useChatNode']
   readonly useChatNodeProcess: ChatViewSlotProps['useChatNodeProcess']
-  readonly historyIncomplete: boolean
   readonly compactTranscript: boolean
   readonly toolsOnlyTranscript?: boolean
   readonly useStore: ChatViewSlotProps['useStore']
@@ -37,7 +36,7 @@ function turnOf(node: ChatNode | undefined): number | undefined {
 
 /** Subscribe, apply Turn-process visibility, and dispatch one stable Context key. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, useChatNode, useChatNodeProcess, historyIncomplete, compactTranscript,
+  nodeKey, useChatNode, useChatNodeProcess, compactTranscript,
   toolsOnlyTranscript = false,
   cwd, openFile, inspectCall, forkAt,
   loadImage, renderMessageImages, fileMentions, useStore, actions, renderSlot, t,
@@ -51,29 +50,28 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     ? undefined
     : storedTurnProcessEntry(state, processSpec.turn))
   const processEntry = processSpec !== undefined
-    && processSpec.answerStep !== null
     && storedEntry?.answerStep === processSpec.answerStep
     ? storedEntry
     : undefined
   const processOpen = processEntry !== undefined
   const setOpen = useCallback((open: boolean) => {
-    if (processSpec !== undefined && processSpec.answerStep !== null) {
+    if (processSpec !== undefined) {
       actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep, open)
     }
   }, [actions, processSpec])
+  // Earlier pages do not change a loaded Turn's closed status or final answer.
   const processWindowReady = processSpec !== undefined
     && processPresentation !== undefined
     && (toolsOnlyTranscript || compactTranscript)
-    && processSpec.answerAnchorSeq !== null
+    && (toolsOnlyTranscript || processSpec.answerAnchorSeq !== null)
     && processPresentation.turn === processSpec.turn
     && processPresentation.turnClosed
-    && !historyIncomplete
   const processMember = routedNode !== undefined
     && processWindowReady
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
-    && (!toolsOnlyTranscript || routedNode.kind === 'tool-call')
+    && (!toolsOnlyTranscript || routedNode.kind === 'tool-call' || routedNode.kind === 'context')
     && routedNode.anchorSeq >= processSpec.processStartSeq
-    && routedNode.anchorSeq < processSpec.answerAnchorSeq
+    && (processSpec.answerAnchorSeq === null || routedNode.anchorSeq < processSpec.answerAnchorSeq)
   const processAnswer = routedNode !== undefined
     && processWindowReady
     && routedNode.kind === 'assistant-step'
@@ -82,18 +80,19 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const foldable = processWindowReady
     && (processMember || (ownsDisclosure
       && (toolsOnlyTranscript
-        ? processSpec.toolCallCount + processSpec.subagentCount > 0
+        ? processSpec.toolCallCount + processSpec.subagentCount + processPresentation.contextCount > 0
         : processPresentation.hasExternalProcess || processSpec.inlineReasoning)))
   const turnProcess = useMemo(() => processSpec === undefined
     ? undefined
     : {
       spec: processSpec,
       toolsOnly: toolsOnlyTranscript,
+      contextCount: processPresentation?.contextCount ?? 0,
       foldable,
       open: processOpen,
       setOpen,
     }, [
-    foldable, processOpen, processSpec, setOpen, toolsOnlyTranscript,
+    foldable, processOpen, processSpec, processPresentation?.contextCount, setOpen, toolsOnlyTranscript,
   ])
   const controllerInactive = routedNode?.kind === 'turn-process'
     && !foldable

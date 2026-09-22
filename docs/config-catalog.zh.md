@@ -412,7 +412,7 @@ export interface Config {
 ```ts config-catalog
 /** Presentation overrides supplied by the application, not user preferences. */
 export interface Config {
-  /** Keep messages visible, fold only completed-turn tools, and hide the mode selector. */
+  /** Keep replies visible, fold completed-turn tools and context, and hide the mode selector. */
   toolsOnlyTranscript?: boolean
 }
 ```

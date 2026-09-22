@@ -24,4 +24,14 @@ describe('createChatStore', () => {
 
     expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 3, answerStep: 4 }])
   })
+
+  it('tracks answerless expansion separately from a later answer generation', () => {
+    const store = createChatStore().create()
+    store.actions.setTurnProcessOpen(1, null, true)
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 1, answerStep: null }])
+    store.actions.setTurnProcessOpen(1, 2, true)
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 1, answerStep: 2 }])
+    store.actions.setTurnProcessOpen(1, 2, false)
+    expect(store.store.getSnapshot().turnProcesses).toEqual([])
+  })
 })
